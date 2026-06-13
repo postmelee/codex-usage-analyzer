@@ -137,6 +137,82 @@ Stage 2에서는 `<codex-home>` 아래의 파일명, 디렉터리 구조, SQLite
 | `codexAssets.avatar` | remote/profile source or asset cache 후보 | generated image/cache files | Low/Deferred. Stage 2 local files만으로 safe avatar source 확정 불가. | local private path 기본 출력 금지. |
 | `codexAssets.pet` | `<codex-home>/pets/` or profile/asset source 후보 | generated images | Low/Deferred. Stage 2에서 pet file 후보 없음. | absence를 실제 `null`로 단정하지 않음. |
 
+### Codex Desktop 원격 profile API 참고
+
+Codex Desktop 추출 bundle과 공개 `openai/codex` 저장소를 대조한 결과, Desktop profile 화면의 주요 지표는 로컬 DB가 아니라 인증된 원격 profile API를 통해 조회된다. 이 경로는 analyzer 기본 parser source가 아니며, local parser 산출값의 의미론을 비교하는 참고 기준으로만 사용한다.
+
+| 항목 | 관찰 내용 | Stage 3 판단 | privacy/security note |
+|---|---|---|---|
+| profile 조회 | Desktop UI는 `/wham/profiles/me`를 조회해 profile 화면 값을 구성한다. 공개 `openai/codex` backend client도 ChatGPT API 경로로 `/wham/profiles/me`, Codex API 경로로 `/api/codex/profiles/me` 계열을 둔다. | remote profile API는 default analyzer source에서 제외한다. #6 smoke baseline 비교 또는 wrapper product에서만 사용한다. | 인증 토큰과 account context가 필요할 수 있으므로 analyzer CLI가 호출하지 않는다. |
+| token summary | remote stats의 `lifetime_tokens`, `peak_daily_tokens`, `daily_usage_buckets[].tokens`, `daily_usage_buckets[].start_date`가 profile 카드의 total/peak/daily 값으로 매핑된다. | local parser는 이 의미론을 목표 기준으로 삼되, source는 local JSONL/SQLite에서 계산한다. | remote aggregate 자체도 account-owned usage data이므로 작업 문서에 실제 값을 기록하지 않는다. |
+| activity summary | remote stats의 `current_streak_days`, `longest_streak_days`, `longest_running_turn_sec`, `fast_mode_usage_percentage`, `most_used_reasoning_effort`, `most_used_reasoning_effort_percentage`, `total_threads`가 profile activity 값으로 매핑된다. | local parser에서 계산 가능한 값만 채우고, fast mode처럼 local source가 불명확한 값은 `null`을 유지한다. | service-side 정의와 local 정의가 다를 수 있어 #6에서 차이를 baseline으로 기록한다. |
+| skills/profile insights | remote stats의 `top_invocations`, `unique_skills_used`, `total_skills_used`가 profile insights로 매핑된다. | local `skills.*`/`plugins.*` 구현의 비교 기준으로만 둔다. `thread_dynamic_tools`를 실제 사용량으로 단정하지 않는다. | invocation 이름에는 custom skill/plugin 이름이 포함될 수 있어 redaction/allowlist 필요. |
+| profile identity | remote profile의 `display_name`, `username`, `profile_picture_url`가 Desktop UI에서 사용된다. | `codexProfile`과 `codexAssets.avatar`는 analyzer 기본 출력이 아니라 wrapper/product-owned 영역으로 둔다. | display name, username, profile image URL은 계정 식별자로 취급한다. |
+| rate limit | Desktop bundle의 `/wham/usage`는 rate-limit/credit UI에 사용된다. | `UsageSnapshot v2` token totals의 source로 사용하지 않는다. | quota/status 정보도 account-owned remote data다. |
+
+### tokscale 참고 구현 분석
+
+`junhoyeo/tokscale`는 Codex 지원을 위해 `<codex-home>/sessions/**/*.jsonl`의 `token_count` 이벤트를 parsing한다. 이는 Stage 2에서 잡은 session JSONL 후보와 일치하며, 원격 profile API에 없는 token breakdown, model grouping, local daily aggregation의 parser 전략을 보강하는 참고 구현으로 가치가 있다.
+
+| 참고 항목 | tokscale 구현 관찰 | Stage 3 적용 판단 | privacy/security note |
+|---|---|---|---|
+| Codex data root | Codex client root는 `CODEX_HOME`이 있으면 해당 값을 쓰고, 없으면 `<home>/.codex` fallback을 사용한다. 상대 경로는 `sessions`, pattern은 `*.jsonl`이다. | analyzer도 `<codex-home>/sessions/**/*.jsonl`을 token breakdown의 1순위 후보로 둔다. archived session은 dedup 검증 후 보조 후보로 둔다. | 실제 home path를 output이나 문서에 기록하지 않는다. |
+| token event | `event_msg` + payload `type=token_count`를 token-bearing event로 처리한다. | #3 parser는 JSONL line streaming으로 `token_count` numeric fields만 allowlist 추출한다. | 같은 payload에 private content key가 섞일 수 있으므로 전체 payload를 log/report하지 않는다. |
+| token increment | `last_token_usage`를 primary increment source로 사용하고, `total_token_usage`는 dedup/monotonicity 검증에 사용한다. cumulative total을 직접 delta로 쓰지 않는다. | #3 parser의 기본 전략으로 채택한다. local SQLite `threads.tokens_used`는 cross-check/fallback으로 둔다. | overcount를 막기 위해 session resume, compaction, out-of-order snapshot을 방어해야 한다. |
+| token breakdown | `input_tokens`, `output_tokens`, `cached_input_tokens` 또는 `cache_read_input_tokens`, `reasoning_output_tokens`를 normalized breakdown으로 합산한다. `cache_write`는 Codex source에서 명확히 확인되지 않으면 0으로 normalize한다. | `inputTokens`, `outputTokens`, `cacheReadTokens`, `reasoningTokens`는 JSONL에서 계산 가능 후보로 확정한다. `cacheWriteTokens`는 명시 source가 없으면 `null`을 유지한다. | `cached_input_tokens`가 input보다 큰 비정상 값을 방어해야 한다. |
+| model context | model은 payload model, `info.model`, `turn_context`, session meta를 조합해 보정한다. | `models.*` source 우선순위는 JSONL token event model, SQLite thread model, model cache display normalization 순서로 둔다. | unknown model은 `model: "unknown"` 같은 synthetic value보다 해당 model item 제외 또는 diagnostic을 우선 검토한다. |
+| fork/replay dedup | forked child session이 parent token history를 replay할 수 있어 parent/fork metadata와 cumulative total key로 중복 집계를 줄인다. | #3 parser 요구사항으로 dedup key 설계를 포함한다. #6 smoke baseline에서 duplicated session 의심을 점검한다. | session id 자체는 output에 노출하지 않는다. |
+| daily/streak | daily aggregate, active days, current/longest streak, contribution graph를 계산한다. current streak은 오늘이 비어 있으면 yesterday 기준도 허용한다. | `usage.daily`, `peakDailyTokens`, streak 계산의 local 참고 구현으로 사용한다. 단, analyzer는 contribution graph/cost 중심 지표를 v2에 추가하지 않는다. | 날짜 bucket만 출력하고 workspace/session/path는 제외한다. |
+| model ranking | TUI/wrapped 경로의 top model 정렬은 cost 기준인 곳이 있다. | `UsageSnapshot v2`의 `favoriteModel`은 기본 `tokens` 기준으로 정한다. cost 기준 ranking은 이번 task와 v2 범위에서 제외한다. | pricing table이나 원격 price sync는 analyzer 기본 기능에 넣지 않는다. |
+| social/wrapped 기능 | wrapped image, leaderboard, public profile, submit flow가 있다. | analyzer ownership 밖이다. 후속 product wrapper 또는 별도 schema 후보로만 기록한다. | submit token, username, public URL은 analyzer snapshot에 넣지 않는다. |
+
+### Stage 3 필드별 mapping 및 fallback 정책
+
+아래 표는 후속 #2-#6이 이어받을 `UsageSnapshot v2` 필드별 source 우선순위다. `fallback/null policy`는 fixture 값을 대체값으로 쓰지 않는 것을 전제로 한다.
+
+| 필드 | source 우선순위 | confidence | fallback/null policy | privacy note | follow-up |
+|---|---|---|---|---|---|
+| `schemaVersion` | package constant | High | 항상 `2` | 민감정보 없음 | #2 |
+| `capturedAt` | analyzer 실행 시각 또는 caller override | High | ISO date-time. test fixture 외 production은 실행 시각 사용 | 민감정보 없음 | #2 |
+| `producer` | package name/version | High | package metadata를 넣거나 생략. fixture marker를 production에 넣지 않음 | 민감정보 없음 | #2 |
+| `codexProfile.*` | wrapper product 또는 remote profile API | Deferred | analyzer default output에서는 생략 권장. caller가 제공할 때만 validator 통과 값 사용 | displayName/username/plan은 account identity로 취급 | #2, #6 |
+| `usage.totalTokens` | session JSONL `token_count.last_token_usage` aggregate | High if token_count exists, Medium with SQLite fallback | source 없음은 `0` + namespaced diagnostic. sample 값 금지 | raw JSONL content/path 제외, numeric aggregate만 출력 | #3 |
+| `usage.peakDailyTokens` | `usage.daily[].totalTokens` max | High if daily aggregate exists | daily source 없음은 `null` | date bucket만 출력 | #3 |
+| `usage.tokenBreakdown.inputTokens` | JSONL `input_tokens` minus safe cache-read adjustment | High if token_count exists | unavailable은 `null` | raw prompt text는 읽거나 출력하지 않음 | #3 |
+| `usage.tokenBreakdown.outputTokens` | JSONL `output_tokens` | High if token_count exists | unavailable은 `null` | raw assistant text는 읽거나 출력하지 않음 | #3 |
+| `usage.tokenBreakdown.cacheReadTokens` | JSONL `cached_input_tokens` 또는 `cache_read_input_tokens` | Medium/High | unavailable은 `null` | malformed cached > input 방어 필요 | #3 |
+| `usage.tokenBreakdown.cacheWriteTokens` | 명시 token field가 확인될 때만 사용 | Low/Deferred | Codex source에서 명확하지 않으면 `null` | 0으로 단정하지 않음 | #3 |
+| `usage.tokenBreakdown.reasoningTokens` | JSONL `reasoning_output_tokens` | Medium/High | unavailable은 `null` | numeric field만 추출 | #3 |
+| `usage.daily[]` | JSONL `token_count` timestamp를 UTC date로 bucket | High if timestamp exists | JSONL 없고 SQLite만 있으면 `threads` timestamp+tokens로 degraded aggregate. source 없음은 `[]` | date와 totals만 출력 | #3, #6 |
+| `models.favoriteModel` | model별 token aggregate 1위 | High if JSONL model+tokens exists | token 기준 불가하고 thread count만 있으면 `basis: "usage_count"`. source 없음은 `null` | model id/display only. workspace/session id 제외 | #3 |
+| `models.items[]` | JSONL model aggregate, SQLite `threads.model` fallback, `models_cache.json` display normalization | High/Medium | source 없음은 `[]`. displayName 불명확하면 `null` | model cache 원문 전체 복제 금지 | #3 |
+| `activity.longestTaskDurationMs` | JSONL turn start to token event duration 또는 explicit duration key | Medium | unavailable은 `null`. SQLite updated-created duration은 degraded fallback으로만 사용 | thread title/cwd 제외 | #3 |
+| `activity.currentStreakDays` | daily totalTokens > 0 date set, `capturedAt` 기준 | Medium/High | daily source 없음은 `null`. 오늘 사용이 없으면 yesterday-ending streak 허용 여부를 #3 test에 고정 | date-only aggregate | #3, #6 |
+| `activity.longestStreakDays` | daily totalTokens > 0 date set | Medium/High | daily source 없음은 `null` | date-only aggregate | #3, #6 |
+| `activity.fastModePercent` | remote profile stats or local service-tier event 후보 | Low/Deferred | local source를 검증하기 전까지 `null` | remote profile 호출 금지 | #3 |
+| `activity.reasoningEffort` | SQLite `threads.reasoning_effort`, JSONL `effort` | High if non-null values exist | unavailable은 `null`. most-used effort 기준 | enum/count만 출력 | #3 |
+| `activity.reasoningEffortPercent` | reasoning effort distribution | High if denominator defined | denominator는 non-null effort rows/events. 없으면 `null` | raw thread fields 제외 | #3 |
+| `activity.totalThreads` | SQLite `threads` distinct count | High | SQLite unreadable이면 unique session count fallback. source 없음은 `null` | thread id/title/cwd 출력 금지 | #3 |
+| `skills.exploredCount` | remote profile stats or validated local invocation extractor | Deferred | local actual usage source 검증 전까지 `null` | catalog/enabled tool count를 사용량으로 오인하지 않음 | #4 |
+| `skills.totalUsed` | remote profile stats or validated local invocation extractor | Deferred | local actual usage source 검증 전까지 `null` | custom skill 이름과 호출 내용 redaction 필요 | #4 |
+| `skills.topSkills[]` | session JSONL actual invocation event, local skill catalog display normalization | Medium/Deferred | actual invocation 검증 전까지 `[]` | enabled/available tool 목록만으로 ranking 생성 금지 | #4 |
+| `plugins.topPlugins[]` | session JSONL actual plugin/tool invocation event, plugin catalog display normalization | Medium/Deferred | actual invocation 검증 전까지 `[]` | remote/local custom plugin 구분, private name 정책 필요 | #4 |
+| `codexAssets.avatar` | wrapper product, remote profile image, safe asset mapper | Deferred | analyzer default output은 `null` 또는 `codexAssets` 생략 | local path와 account image URL 기본 출력 금지 | #5 |
+| `codexAssets.pet` | Codex Desktop avatar/pet asset policy 또는 wrapper product | Deferred | safe source 확정 전까지 `null` | generated/private image artifact 기본 출력 금지 | #5 |
+| `extensions` | analyzer diagnostics namespace | Medium | unavailable source, degraded fallback, parser warnings를 `codexUsageAnalyzer.*`에 기록 가능. raw values 금지 | extension key namespace 강제, 민감 문자열 validator 유지 | #2, #3, #6 |
+
+### Stage 3 source 우선순위 결론
+
+| 영역 | primary | fallback | default unavailable |
+|---|---|---|---|
+| token totals/breakdown | session JSONL `token_count.last_token_usage` | SQLite `threads.tokens_used` for total-only | total `0` + diagnostic, nullable breakdown `null` |
+| daily/peak/streak | session JSONL timestamp bucket | SQLite thread timestamp bucket | `daily: []`, nullable activity `null` |
+| model ranking | JSONL token event model aggregate | SQLite model/thread count aggregate | `favoriteModel: null`, `items: []` |
+| thread/activity count | SQLite `threads` | unique session files | `null` |
+| reasoning effort | SQLite or JSONL effort fields | none | `null` |
+| skills/plugins | validated actual invocation events | remote profile comparison only | counts `null`, arrays `[]` |
+| avatar/pet/profile | wrapper/remote product source | none | omitted or `null` |
+
 ## 결정
 
 - Stage 1 기준으로 실제 데이터 source는 아직 확정하지 않는다. 현재 production CLI/SDK 값의 source는 fixture로 기록한다.
@@ -148,15 +224,18 @@ Stage 2에서는 `<codex-home>` 아래의 파일명, 디렉터리 구조, SQLite
 - session JSONL은 event-level detail과 skills/plugins 후보 source로 둔다. 단, allowlist parser 없이는 raw payload를 output에 연결하지 않는다.
 - `logs_2.sqlite`는 diagnostics/coverage 보조 후보로 두고, token 계산의 primary source로 삼지 않는다.
 - `auth.json`, `config.toml`, remote credential 기반 API는 analyzer 기본 parser source에서 제외한다.
+- Stage 3 기준으로 token breakdown과 daily/model aggregate의 primary source는 session JSONL `token_count` event로 둔다.
+- Stage 3 기준으로 remote profile API와 `tokscale`는 각각 의미론 비교 기준과 parser 참고 구현으로만 사용한다.
+- Stage 3 기준으로 `UsageSnapshot v2`의 required numeric field가 source unavailable일 때는 sample 값 대신 zero-value와 namespaced diagnostic을 조합하는 정책을 후속 #2/#3에서 구현한다.
 
 ## 비결정 / 보류
 
-- token totals, daily buckets, model usage, activity insights, skills/plugins ranking, avatar/pet discovery의 실제 source 우선순위는 Stage 3에서 확정한다.
 - `extensions`에 어떤 diagnostic namespace와 shape를 둘지는 후속 #2 또는 #3에서 구현 범위와 함께 결정한다.
 - `codexProfile`을 analyzer가 계속 허용만 할지, production 기본 출력에서 생략할지는 후속 #2에서 분리 정책과 함께 결정한다.
 - `thread_dynamic_tools`가 실제 invocation count인지, thread에서 enabled/available한 tool catalog인지 아직 확정하지 않았다.
-- active sessions와 archived sessions의 중복 제거 기준은 Stage 3에서 정한다.
+- active sessions와 archived sessions의 구체 dedup key는 후속 #3에서 parser test와 함께 고정한다.
 - local generated images와 `pets/` directory를 `codexAssets`로 연결할지는 safe output 정책이 먼저 필요하다.
+- `tokscale`의 cost, wrapped image, leaderboard, public profile 계열 지표는 현재 `UsageSnapshot v2` 범위에서 제외한다. 필요하면 별도 schema issue가 필요하다.
 
 ## 적용 영향
 
@@ -165,9 +244,12 @@ Stage 2에서는 `<codex-home>` 아래의 파일명, 디렉터리 구조, SQLite
 - #4는 `topPlugins: []`가 실제 미사용인지, 아직 source 없음인지 구분해야 한다.
 - #5는 asset discovery에서 local private path를 기본 JSON에 노출하지 않는 safe output 정책을 유지해야 한다.
 - #6은 redacted baseline에서 account identifier, local path, credential 원문을 제외해야 한다.
+- #6은 local parser 산출값과 remote profile API의 의미 차이를 baseline에 기록하되, remote API 호출을 analyzer 기본 동작으로 만들지 않아야 한다.
 
 ## 참고 링크
 
 - [README](../../README.md)
 - [수행계획서](../plans/task_m010_1.md)
 - [구현계획서](../plans/task_m010_1_impl.md)
+- [openai/codex](https://github.com/openai/codex)
+- [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale)
