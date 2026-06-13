@@ -12,11 +12,21 @@ npx codex-usage-analyzer@latest analyze --json
 
 The `--json` mode writes a single `UsageSnapshot v2` object to stdout. Errors and usage text are written to stderr.
 
+Until the real local parser lands, the production `analyze --json` path emits a valid unavailable snapshot: required numeric totals are zero, unavailable details are `null` or empty arrays, and `extensions["codexUsageAnalyzer.diagnostics"]` explains that the local parser is not implemented yet. The production path does not return the sample fixture.
+
 Local repository smoke command:
 
 ```bash
 node bin/codex-usage-analyzer.js analyze --json
 ```
+
+Development fixture command:
+
+```bash
+node bin/codex-usage-analyzer.js analyze --json --fixture-sample
+```
+
+The `--fixture-sample` mode is for tests, examples, and contract inspection only. It returns the packaged sample snapshot and must not be treated as real local Codex usage.
 
 ## SDK
 
@@ -32,7 +42,9 @@ const snapshot = await analyzeUsage();
 assertUsageSnapshotV2(snapshot);
 ```
 
-The current implementation is a contract-first skeleton. It returns a sample-backed `UsageSnapshot v2` object while the real local source parser is implemented in a later task.
+`analyzeUsage()` returns the production analyzer result. While the real local source parser is implemented in later tasks, unavailable fields use zero, `null`, empty arrays, and a namespaced diagnostic extension rather than sample values.
+
+Use `createSampleUsageSnapshotV2()` only for examples, tests, and contract inspection.
 
 Public exports:
 
@@ -69,9 +81,10 @@ Wrapper metadata such as bearer tokens, device ids, account handles, visibility,
 ```bash
 npm test
 node bin/codex-usage-analyzer.js analyze --json
+node bin/codex-usage-analyzer.js analyze --json --fixture-sample
 ```
 
-The test suite validates the SDK exports, CLI behavior, and `UsageSnapshot v2` schema rules.
+The test suite validates the SDK exports, production CLI behavior, fixture-only CLI behavior, and `UsageSnapshot v2` schema rules.
 
 ## Non-Goals
 
@@ -87,4 +100,4 @@ This package does not:
 
 ## Status
 
-This repository starts as a standalone home for the analyzer package. npm publishing, release automation, and the real local source parser are follow-up work.
+This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and the real local source parser are follow-up work.

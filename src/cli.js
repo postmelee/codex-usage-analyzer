@@ -1,6 +1,13 @@
-import { analyzeUsage } from "./analyze.js";
+import {
+  analyzeUsage,
+  createSampleUsageSnapshotV2
+} from "./analyze.js";
 
-const USAGE = "Usage: codex-usage-analyzer analyze --json";
+const USAGE = [
+  "Usage:",
+  "  codex-usage-analyzer analyze --json",
+  "  codex-usage-analyzer analyze --json --fixture-sample"
+].join("\n");
 
 export async function runCli(argv, io = {}) {
   const stdout = io.stdout ?? process.stdout;
@@ -19,14 +26,19 @@ export async function runCli(argv, io = {}) {
   }
 
   const hasJsonFlag = flags.includes("--json");
-  const unknownFlags = flags.filter((flag) => flag !== "--json");
+  const hasFixtureSampleFlag = flags.includes("--fixture-sample");
+  const unknownFlags = flags.filter((flag) => {
+    return flag !== "--json" && flag !== "--fixture-sample";
+  });
 
   if (!hasJsonFlag || unknownFlags.length > 0) {
     stderr.write(`${USAGE}\n`);
     return 1;
   }
 
-  const snapshot = await analyzeUsage();
+  const snapshot = hasFixtureSampleFlag
+    ? createSampleUsageSnapshotV2()
+    : await analyzeUsage();
   stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`);
   return 0;
 }
