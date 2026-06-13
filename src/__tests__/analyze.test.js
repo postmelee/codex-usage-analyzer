@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   ANALYZER_NAME,
@@ -9,6 +12,9 @@ import {
   sampleUsageSnapshotV2,
   validateUsageSnapshotV2
 } from "../index.js";
+
+const parserFixtureDir = fileURLToPath(new URL("./fixtures/parser", import.meta.url));
+const forbiddenParserFixturePattern = /\/Users\/|\/home\/|\/private\/var\/|access_token|refresh_token|Bearer |sk-|github_pat_/;
 
 test("analyzes usage into a production unavailable UsageSnapshot v2", async () => {
   const before = Date.now();
@@ -86,3 +92,33 @@ test("creates a sample UsageSnapshot v2 with safe overrides", () => {
     sampleUsageSnapshotV2.extensions["codexUsageAnalyzer.fixture"]
   );
 });
+
+test("keeps parser source fixtures synthetic and private-safe", () => {
+  const matches = [];
+
+  for (const fixturePath of listFixtureFiles(parserFixtureDir)) {
+    const content = readFileSync(fixturePath, "utf8");
+
+    if (forbiddenParserFixturePattern.test(content)) {
+      matches.push(fixturePath);
+    }
+  }
+
+  assert.deepEqual(matches, []);
+});
+
+function listFixtureFiles(directory) {
+  const files = [];
+
+  for (const entry of readdirSync(directory)) {
+    const entryPath = join(directory, entry);
+
+    if (statSync(entryPath).isDirectory()) {
+      files.push(...listFixtureFiles(entryPath));
+    } else {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
