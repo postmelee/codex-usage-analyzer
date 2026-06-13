@@ -81,4 +81,8 @@ test("creates a sample UsageSnapshot v2 with safe overrides", () => {
   assert.equal(snapshot.capturedAt, "2026-06-13T00:00:00.000Z");
   assert.equal(snapshot.usage.totalTokens, 42);
   assert.equal(snapshot.usage.tokenBreakdown.inputTokens, 646900000);
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.fixture"],
+    sampleUsageSnapshotV2.extensions["codexUsageAnalyzer.fixture"]
+  );
 });
