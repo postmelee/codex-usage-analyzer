@@ -10,6 +10,14 @@ export interface AnalyzeUsageOptions {
    * Capture timestamp for the production snapshot. Defaults to the analyzer run time.
    */
   capturedAt?: string | Date | null;
+  /**
+   * Local Codex home root for parser source discovery. Reserved for parser integration.
+   */
+  codexHome?: string | null;
+  /**
+   * Deterministic clock value for date and streak calculations in parser tests.
+   */
+  now?: string | Date | null;
 }
 
 export interface CliIo {
