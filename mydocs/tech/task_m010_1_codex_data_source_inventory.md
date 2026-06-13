@@ -90,6 +90,53 @@ Stage 1은 저장소 내부 계약과 현재 동작만 조사한다. 로컬 Code
 | `codexAssets.*` | `src/fixtures/sample-v2-snapshot.js` | High for current code path, None for real asset discovery | local path를 기본 출력에 넣으면 안 된다. |
 | `codexProfile.*` | `src/fixtures/sample-v2-snapshot.js` | High for current code path, None for analyzer ownership | profile/account identity는 wrapper product-owned field다. |
 
+### Stage 2 로컬 데이터 후보 inventory
+
+Stage 2에서는 `<codex-home>` 아래의 파일명, 디렉터리 구조, SQLite schema, JSONL key schema만 확인했다. `auth.json`, `config.toml`, 원본 로그 body, 세션 메시지 content, stdout/stderr payload 값은 열람하거나 문서화하지 않았다.
+
+| 후보 | 형태 | 접근 조건 | 갱신 주기 | 수집 가능 필드 후보 | confidence | privacy/security note |
+|---|---|---|---|---|---|---|
+| `<codex-home>/state_5.sqlite` | SQLite DB | local read-only SQLite 연결. WAL 동반 가능성 고려 필요 | Codex thread 생성/갱신 시점 | `activity.totalThreads`, daily activity, thread duration, `usage.totalTokens` 후보, model/provider, reasoning effort | High | `cwd`, `title`, `first_user_message`, git remote URL 등 민감 컬럼이 있어 output에서 제외해야 한다. |
+| `<codex-home>/sqlite/state_5.sqlite` | SQLite DB mirror/copy 후보 | local read-only SQLite 연결 | main state DB와 함께 갱신될 수 있음 | 위 `state_5.sqlite` fallback 후보 | Medium | 중복 DB일 수 있으므로 freshness와 row overlap 검증 필요. |
+| `<codex-home>/sessions/YYYY/MM/DD/*.jsonl` | JSONL event log | 파일명과 JSON key schema만 확인. parser 구현 시 line streaming 필요 | thread event append 시점 | model, provider, effort, duration, dynamic tools, turn timing, possible token detail | High | `payload.content`, `user_instructions`, `stdout`, `stderr`, local images, cwd 등 raw private content가 포함될 수 있어 기본 출력 금지. |
+| `<codex-home>/archived_sessions/*.jsonl` | JSONL event log archive | 파일명과 JSON key schema만 확인 | session archive/rollout 시점 | historical sessions, older tool/model/event detail | Medium | active sessions와 중복 가능. encrypted/raw content field가 있어 strict redaction 필요. |
+| `<codex-home>/session_index.jsonl` | JSONL index 후보 | 내용 미열람. 파일 존재와 형태만 확인 | session index 갱신 시점 | session discovery, dedup, date range 후보 | Medium | index에 제목/경로/요약이 있을 수 있어 raw value 출력 금지. |
+| `<codex-home>/logs_2.sqlite` | SQLite DB | local read-only SQLite 연결. 큰 DB라 집계/인덱스 중심 접근 필요 | runtime logging 시점 | diagnostics, thread/process join, event byte estimate, timestamp coverage | Medium | `feedback_log_body`, file/module info가 민감할 수 있다. token usage source로 직접 신뢰하지 않는다. |
+| `<codex-home>/generated_images/` | image files grouped by thread-like ids | 파일 존재만 확인 | image generation 시점 | generated image asset reference 후보 | Low | generated outputs may be private artifacts. 기본 analyzer JSON에 local path를 넣지 않는다. |
+| `<codex-home>/pets/` | asset directory 후보 | 파일명 수준 확인 | unknown | pet asset discovery 후보 | Low | Stage 2 환경에서는 파일 후보가 확인되지 않았다. absence를 product-level null로 단정하지 않는다. |
+| `<codex-home>/cache/`, `<codex-home>/plugins/`, `<codex-home>/vendor_imports/skills/`, `<codex-home>/skills/` | JSON/cache/local skill/plugin files | file metadata와 catalog schema 중심 접근 | plugin/skill catalog sync 시점 | skill/plugin catalog, display name normalization | Medium | catalog presence는 invocation count가 아니다. custom skill 이름이 private일 수 있어 redaction 필요. |
+| `<codex-home>/models_cache.json` | JSON cache | key/schema 수준 접근 가능 | model catalog refresh 시점 | model id/display normalization | Medium | model list 자체는 낮은 민감도지만 cache content를 output에 복제하지 않는다. |
+| `<codex-home>/auth.json`, `<codex-home>/config.toml` | auth/config files | Stage 2에서 내용 미열람 | login/config update 시점 | analyzer source로 사용하지 않음 | None | credential 또는 account 식별자가 있을 수 있어 parser 기본 경로에서 읽지 않는다. |
+| 원격 API | remote service | credential 필요 가능성 높음 | service-side | profile/avatar/pet/usage official source 가능성 | Deferred | 이번 task 범위와 parser MVP 기본 경로에서 제외. 별도 승인 필요. |
+
+### Stage 2 관찰한 schema metadata
+
+| source | 관찰한 schema/key | 해석 |
+|---|---|---|
+| `state_5.sqlite.threads` | `id`, `rollout_path`, `created_at`, `updated_at`, `tokens_used`, `model`, `reasoning_effort`, `model_provider`, `archived`, `source`, `created_at_ms`, `updated_at_ms` 등 | core usage/activity/model source의 1순위 후보. `cwd`, `title`, `first_user_message`, git 관련 컬럼은 private context이므로 output 제외 대상. |
+| `state_5.sqlite.thread_dynamic_tools` | `thread_id`, `position`, `name`, `description`, `input_schema`, `namespace` 등 | thread별 사용 가능 tool/plugin/skill metadata 후보. 실제 invocation count인지 enabled tool 목록인지 Stage 3에서 구분 필요. |
+| `state_5.sqlite.agent_jobs*` | job/item status, instruction, CSV path, result JSON 등 | multi-agent/batch 작업 metadata 후보. 일반 usage snapshot 기본 필드에는 우선순위 낮음. |
+| `logs_2.sqlite.logs` | `ts`, `level`, `target`, `feedback_log_body`, `module_path`, `thread_id`, `process_uuid`, `estimated_bytes` 등 | diagnostics와 coverage 확인 후보. raw body는 private content 가능성이 높아 기본 analyzer source로 직접 쓰지 않는다. |
+| session JSONL | top-level `type`, `timestamp`, `payload`; payload key로 `model`, `model_provider`, `effort`, `duration`, `dynamic_tools`, `rate_limits`, `thread_id`, `turn_id`, `status` 등 | event-level detail source 후보. content/stdout/stderr/cwd 관련 key는 strict redaction 필요. |
+| archived session JSONL | active session JSONL과 유사하며 `encrypted_content`, `completed_at`, `last_agent_message` 등 추가 key 관찰 | historical coverage 후보. active sessions와 dedup 필요. |
+
+### Stage 2 필드 후보별 source 판단
+
+| 필드 그룹 | 1순위 후보 | 보조 후보 | Stage 2 판단 | privacy note |
+|---|---|---|---|---|
+| `usage.totalTokens` | `state_5.sqlite.threads.tokens_used` | session JSONL token/rate-limit detail 후보 | High confidence 후보. profile 값과 의미가 같은지는 Stage 3/후속 #3에서 비교 필요. | thread별 aggregate만 사용하고 title/content/cwd는 제외. |
+| `usage.tokenBreakdown` | session JSONL token detail 후보 | unavailable diagnostic | Medium/Deferred. Stage 2 schema만으로 breakdown source를 확정하지 못했다. | raw event payload에 private content가 섞일 수 있어 필요한 numeric fields만 allowlist로 추출. |
+| `usage.daily`, `peakDailyTokens` | `state_5.sqlite.threads.created_at_ms/updated_at_ms` + `tokens_used` | session file date path, session JSONL timestamp | High for daily aggregate 후보. timezone/date boundary 정책은 Stage 3에서 확정. | local path date 구조를 output하지 않고 date bucket만 계산. |
+| `activity.totalThreads` | `state_5.sqlite.threads` | session index | High. archived 포함 여부와 source filter는 Stage 3에서 결정. | thread title/source/cwd는 제외. |
+| streaks | thread timestamps | session timestamps | Medium. daily active bucket 정의가 필요. | date-only aggregate로 제한. |
+| `activity.longestTaskDurationMs` | `threads.created_at_ms/updated_at_ms` 또는 session event duration | JSONL `duration` key | Medium. thread lifecycle duration과 task duration 의미 차이 검증 필요. | raw messages 불필요. |
+| `activity.reasoningEffort*` | `state_5.sqlite.threads.reasoning_effort` | session JSONL `effort` key | High for effort distribution 후보. percent denominator는 Stage 3에서 정의. | effort enum/count만 출력. |
+| `models.*` | `state_5.sqlite.threads.model`, `model_provider`, `tokens_used` | session JSONL model keys, `models_cache.json` display normalization | High. favorite basis는 tokens 또는 usage_count 중 Stage 3에서 확정. | model names are low sensitivity, but cache content not copied. |
+| `skills.topSkills` | session JSONL `dynamic_tools`, local skills/catalog files | `thread_dynamic_tools` | Medium. enabled tool 목록과 actual invocation을 구분해야 한다. | custom skill names may be private; normalization/redaction policy 필요. |
+| `plugins.topPlugins` | session JSONL dynamic tools / plugin invocation events | plugin cache/catalog | Medium. `thread_dynamic_tools` alone may not prove actual use. | remote catalog와 local custom plugin 구분 필요. |
+| `codexAssets.avatar` | remote/profile source or asset cache 후보 | generated image/cache files | Low/Deferred. Stage 2 local files만으로 safe avatar source 확정 불가. | local private path 기본 출력 금지. |
+| `codexAssets.pet` | `<codex-home>/pets/` or profile/asset source 후보 | generated images | Low/Deferred. Stage 2에서 pet file 후보 없음. | absence를 실제 `null`로 단정하지 않음. |
+
 ## 결정
 
 - Stage 1 기준으로 실제 데이터 source는 아직 확정하지 않는다. 현재 production CLI/SDK 값의 source는 fixture로 기록한다.
@@ -97,13 +144,19 @@ Stage 1은 저장소 내부 계약과 현재 동작만 조사한다. 로컬 Code
 - 후속 #2는 fixture와 production analyzer path를 분리하는 선행 작업이어야 한다.
 - 후속 parser는 값이 없거나 계산 불가능한 필드를 sample 값으로 채우지 않는다. 가능한 경우 `null`, empty array, 또는 namespaced diagnostic extension으로 unavailable reason을 남긴다.
 - 기술 조사와 보고서에는 실제 사용자 경로, token, credential, 계정 식별자 원문, raw 로그 본문을 남기지 않는다.
+- Stage 2 기준으로 `state_5.sqlite`를 core usage/activity/model source의 1순위 후보로 둔다.
+- session JSONL은 event-level detail과 skills/plugins 후보 source로 둔다. 단, allowlist parser 없이는 raw payload를 output에 연결하지 않는다.
+- `logs_2.sqlite`는 diagnostics/coverage 보조 후보로 두고, token 계산의 primary source로 삼지 않는다.
+- `auth.json`, `config.toml`, remote credential 기반 API는 analyzer 기본 parser source에서 제외한다.
 
 ## 비결정 / 보류
 
-- 로컬 Codex 데이터 후보의 실제 파일/DB/API 형태, 접근 조건, 갱신 주기는 Stage 2에서 조사한다.
 - token totals, daily buckets, model usage, activity insights, skills/plugins ranking, avatar/pet discovery의 실제 source 우선순위는 Stage 3에서 확정한다.
 - `extensions`에 어떤 diagnostic namespace와 shape를 둘지는 후속 #2 또는 #3에서 구현 범위와 함께 결정한다.
 - `codexProfile`을 analyzer가 계속 허용만 할지, production 기본 출력에서 생략할지는 후속 #2에서 분리 정책과 함께 결정한다.
+- `thread_dynamic_tools`가 실제 invocation count인지, thread에서 enabled/available한 tool catalog인지 아직 확정하지 않았다.
+- active sessions와 archived sessions의 중복 제거 기준은 Stage 3에서 정한다.
+- local generated images와 `pets/` directory를 `codexAssets`로 연결할지는 safe output 정책이 먼저 필요하다.
 
 ## 적용 영향
 
