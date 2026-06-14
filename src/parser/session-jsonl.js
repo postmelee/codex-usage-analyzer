@@ -70,6 +70,27 @@ export async function* readSessionJsonlEntries(files) {
   }
 }
 
+export function normalizeSessionTokenCountEvent(event) {
+  if (!isRecord(event) || event.type !== "event_msg") {
+    return null;
+  }
+
+  const payload = event.payload;
+  if (!isRecord(payload) || payload.type !== "token_count") {
+    return null;
+  }
+
+  return {
+    durationMs: payload.duration_ms,
+    effort: payload.effort,
+    lastTokenUsage: isRecord(payload.last_token_usage) ? payload.last_token_usage : null,
+    mode: payload.mode,
+    model: payload.model,
+    timestamp: event.timestamp,
+    totalTokenUsage: isRecord(payload.total_token_usage) ? payload.total_token_usage : null
+  };
+}
+
 async function collectJsonlFiles(directory, files, diagnostics) {
   let entries;
   try {
@@ -91,4 +112,8 @@ async function collectJsonlFiles(directory, files, diagnostics) {
       files.push(entryPath);
     }
   }
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

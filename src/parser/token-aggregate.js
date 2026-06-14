@@ -1,6 +1,7 @@
 import { resolveCodexHome } from "./codex-home.js";
 import {
   discoverSessionJsonlFiles,
+  normalizeSessionTokenCountEvent,
   readSessionJsonlEntries
 } from "./session-jsonl.js";
 
@@ -44,7 +45,7 @@ export async function aggregateTokenUsageFromSessionFiles(files) {
       continue;
     }
 
-    const tokenEvent = normalizeTokenEvent(entry.event);
+    const tokenEvent = normalizeSessionTokenCountEvent(entry.event);
     if (tokenEvent === null) {
       state.diagnostics.ignoredEvents += 1;
       continue;
@@ -65,7 +66,7 @@ export async function aggregateTokenUsageFromSessionFiles(files) {
 
 function createAggregateState() {
   return {
-    breakdown: createNullableSumState(),
+    breakdown: createNullableTokenBreakdownState(),
     daily: new Map(),
     diagnostics: {
       status: "unavailable",
@@ -86,7 +87,7 @@ function createAggregateState() {
 }
 
 function applyTokenEvent(state, tokenEvent) {
-  const totalTokens = getTokenTotal(tokenEvent.lastTokenUsage);
+  const totalTokens = getTokenUsageTotal(tokenEvent.lastTokenUsage);
   if (totalTokens === null) {
     state.diagnostics.tokenEventsWithoutLastUsage += 1;
     return;
@@ -94,13 +95,13 @@ function applyTokenEvent(state, tokenEvent) {
 
   state.totalTokens += totalTokens;
   state.diagnostics.tokenEventsWithUsage += 1;
-  addBreakdown(state.breakdown, tokenEvent.lastTokenUsage);
+  addTokenUsageBreakdown(state.breakdown, tokenEvent.lastTokenUsage);
 
   const date = getUtcDate(tokenEvent.timestamp);
   if (date !== null) {
     const daily = getDailyBucket(state.daily, date);
     daily.totalTokens += totalTokens;
-    addBreakdown(daily.breakdown, tokenEvent.lastTokenUsage);
+    addTokenUsageBreakdown(daily.breakdown, tokenEvent.lastTokenUsage);
   }
 }
 
@@ -110,7 +111,7 @@ function finalizeAggregate(filesScanned, state) {
     .map(([date, bucket]) => ({
       date,
       totalTokens: bucket.totalTokens,
-      ...finalizeBreakdown(bucket.breakdown)
+      ...finalizeTokenBreakdown(bucket.breakdown)
     }));
 
   const peakDailyTokens = daily.length > 0
@@ -127,29 +128,13 @@ function finalizeAggregate(filesScanned, state) {
     usage: {
       totalTokens: state.totalTokens,
       peakDailyTokens,
-      tokenBreakdown: finalizeBreakdown(state.breakdown),
+      tokenBreakdown: finalizeTokenBreakdown(state.breakdown),
       daily
     }
   };
 }
 
-function normalizeTokenEvent(event) {
-  if (!isRecord(event) || event.type !== "event_msg") {
-    return null;
-  }
-
-  const payload = event.payload;
-  if (!isRecord(payload) || payload.type !== "token_count") {
-    return null;
-  }
-
-  return {
-    lastTokenUsage: isRecord(payload.last_token_usage) ? payload.last_token_usage : null,
-    timestamp: event.timestamp
-  };
-}
-
-function getTokenTotal(usage) {
+export function getTokenUsageTotal(usage) {
   const explicitTotal = readNonNegativeInteger(usage.total_tokens);
   if (explicitTotal !== null) {
     return explicitTotal;
@@ -168,7 +153,7 @@ function getTokenTotal(usage) {
   return hasAnyField ? total : null;
 }
 
-function addBreakdown(target, usage) {
+export function addTokenUsageBreakdown(target, usage) {
   for (const [targetKey, ...sourceKeys] of TOKEN_FIELDS) {
     const value = readFirstNonNegativeInteger(usage, sourceKeys);
     if (value !== null) {
@@ -178,7 +163,7 @@ function addBreakdown(target, usage) {
   }
 }
 
-function createNullableSumState() {
+export function createNullableTokenBreakdownState() {
   return {
     inputTokens: { seen: false, value: 0 },
     outputTokens: { seen: false, value: 0 },
@@ -188,7 +173,7 @@ function createNullableSumState() {
   };
 }
 
-function finalizeBreakdown(state) {
+export function finalizeTokenBreakdown(state) {
   return Object.fromEntries(Object.entries(state).map(([key, entry]) => {
     return [key, entry.seen ? entry.value : null];
   }));
@@ -201,14 +186,14 @@ function getDailyBucket(buckets, date) {
   }
 
   const bucket = {
-    breakdown: createNullableSumState(),
+    breakdown: createNullableTokenBreakdownState(),
     totalTokens: 0
   };
   buckets.set(date, bucket);
   return bucket;
 }
 
-function getUtcDate(value) {
+export function getUtcDate(value) {
   if (typeof value !== "string") {
     return null;
   }
@@ -241,8 +226,4 @@ function summarizeDiscovery(diagnostics) {
     code: diagnostic.code,
     severity: diagnostic.severity
   }));
-}
-
-function isRecord(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
