@@ -107,7 +107,7 @@ Task #5 Stage 1: asset source 계약과 fixture 설계
   - avatar는 Stage 1에서 safe local source가 확인된 경우에만 반환한다. 확인되지 않으면 `null` 또는 omitted output + diagnostics로 둔다.
 - deterministic candidate selection을 구현한다.
   - stable sort 기준을 고정한다.
-  - `assetRef`는 `codex-local:{asset-kind}:{digest}` 형태로 두되 digest 입력에 raw path를 그대로 출력하지 않는다.
+  - `assetRef`는 `codex-local:{asset-kind}:primary` 같은 logical reference로 두고, raw path, file name, file-name hash를 출력하지 않는다.
 - diagnostics를 구현한다.
   - `status`, `reason`, `source`, `avatar`, `pet`
   - scanned candidate count
