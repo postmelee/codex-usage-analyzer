@@ -54,11 +54,13 @@ export async function* readSessionJsonlEntries(files) {
 
         try {
           yield {
+            file,
             kind: "event",
             event: JSON.parse(line)
           };
         } catch {
           yield {
+            file,
             kind: "malformed_line",
             lineNumber
           };
@@ -87,10 +89,32 @@ export function normalizeSessionTokenCountEvent(event) {
     effort: payload.effort,
     lastTokenUsage: readRecordAlias(payload, info, "last_token_usage"),
     mode: payload.mode,
-    model: payload.model,
+    model: extractSessionModel(event),
     timestamp: event.timestamp,
     totalTokenUsage: readRecordAlias(payload, info, "total_token_usage")
   };
+}
+
+export function extractSessionModel(event) {
+  if (!isRecord(event)) {
+    return null;
+  }
+
+  const payload = isRecord(event.payload) ? event.payload : null;
+  if (payload === null) {
+    return null;
+  }
+
+  const info = isRecord(payload.info) ? payload.info : null;
+  const modelInfo = isRecord(payload.model_info) ? payload.model_info : null;
+
+  return readStringAlias(
+    modelInfo?.slug,
+    payload.model,
+    payload.model_name,
+    info?.model,
+    info?.model_name
+  );
 }
 
 async function collectJsonlFiles(directory, files, diagnostics) {
@@ -127,6 +151,16 @@ function readRecordAlias(primary, secondary, key) {
 
   if (isRecord(secondary?.[key])) {
     return secondary[key];
+  }
+
+  return null;
+}
+
+function readStringAlias(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
   }
 
   return null;

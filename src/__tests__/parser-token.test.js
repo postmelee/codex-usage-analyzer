@@ -15,11 +15,11 @@ test("aggregates token and daily usage from session JSONL fixtures", async () =>
   assert.equal(result.diagnostics.reason, null);
   assert.equal(result.diagnostics.source, "option");
   assert.equal(result.diagnostics.filesScanned, 3);
-  assert.equal(result.diagnostics.entriesScanned, 7);
+  assert.equal(result.diagnostics.entriesScanned, 8);
   assert.equal(result.diagnostics.tokenEvents, 5);
   assert.equal(result.diagnostics.tokenEventsWithUsage, 5);
   assert.equal(result.diagnostics.malformedLines, 1);
-  assert.equal(result.diagnostics.ignoredEvents, 1);
+  assert.equal(result.diagnostics.ignoredEvents, 2);
   assert.equal(JSON.stringify(result.diagnostics).includes(parserFixtureCodexHome), false);
   assert.equal(JSON.stringify(result.diagnostics).includes("lineNumber"), false);
   assert.deepEqual(result.usage, {

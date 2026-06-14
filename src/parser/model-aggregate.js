@@ -1,6 +1,7 @@
 import { resolveCodexHome } from "./codex-home.js";
 import {
   discoverSessionJsonlFiles,
+  extractSessionModel,
   normalizeSessionTokenCountEvent,
   readSessionJsonlEntries
 } from "./session-jsonl.js";
@@ -31,6 +32,7 @@ export async function aggregateModelUsageFromSessionFiles(files) {
   const state = createAggregateState();
 
   for await (const entry of readSessionJsonlEntries(files)) {
+    updateFileContext(state, entry);
     state.diagnostics.entriesScanned += 1;
 
     if (entry.kind === "malformed_line") {
@@ -43,20 +45,31 @@ export async function aggregateModelUsageFromSessionFiles(files) {
       continue;
     }
 
+    const eventModel = extractSessionModel(entry.event);
     const tokenEvent = normalizeSessionTokenCountEvent(entry.event);
     if (tokenEvent === null) {
-      state.diagnostics.ignoredEvents += 1;
+      if (eventModel !== null) {
+        state.currentModel = eventModel;
+        state.diagnostics.modelContextEvents += 1;
+      } else {
+        state.diagnostics.ignoredEvents += 1;
+      }
       continue;
     }
 
     state.diagnostics.tokenEvents += 1;
 
-    const model = readNonEmptyString(tokenEvent.model);
+    const directModel = readNonEmptyString(tokenEvent.model);
+    const model = directModel ?? state.currentModel;
     if (model === null) {
       state.diagnostics.tokenEventsWithoutModel += 1;
       continue;
     }
 
+    state.currentModel = model;
+    if (directModel === null) {
+      state.diagnostics.tokenEventsWithInheritedModel += 1;
+    }
     state.diagnostics.tokenEventsWithModel += 1;
     applyModelEvent(state, model, tokenEvent);
   }
@@ -66,6 +79,8 @@ export async function aggregateModelUsageFromSessionFiles(files) {
 
 function createAggregateState() {
   return {
+    currentFile: null,
+    currentModel: null,
     diagnostics: {
       status: "unavailable",
       reason: "no_model_events",
@@ -73,8 +88,10 @@ function createAggregateState() {
       filesScanned: 0,
       entriesScanned: 0,
       ignoredEvents: 0,
+      modelContextEvents: 0,
       tokenEvents: 0,
       tokenEventsWithModel: 0,
+      tokenEventsWithInheritedModel: 0,
       tokenEventsWithoutModel: 0,
       tokenEventsWithUsage: 0,
       malformedLines: 0,
@@ -83,6 +100,15 @@ function createAggregateState() {
     },
     models: new Map()
   };
+}
+
+function updateFileContext(state, entry) {
+  if (entry.file === undefined || entry.file === state.currentFile) {
+    return;
+  }
+
+  state.currentFile = entry.file;
+  state.currentModel = null;
 }
 
 function applyModelEvent(state, model, tokenEvent) {

@@ -13,6 +13,7 @@ GitHub Issue: [#3](https://github.com/postmelee/codex-usage-analyzer/issues/3)
 | 3 | model/activity aggregate 구현 | `src/parser/`, parser/analyze tests, `mydocs/working/task_m010_3_stage3.md` | `npm test`, model/activity aggregate 확인, `git diff --check` |
 | 4 | analyzer integration, CLI/README, regression hardening | `src/analyze.js`, `README.md`, tests, `mydocs/working/task_m010_3_stage4.md` | `npm test`, 기본/fixture CLI 실행, `git diff --check` |
 | 5 | 실제 환경 smoke와 최종 정리 | `mydocs/working/task_m010_3_stage5.md`, `mydocs/report/task_m010_3_report.md` | `npm test`, 실제 CLI smoke, privacy review, `git diff --check` |
+| 6 | stateful model tracking과 streak 차이 분석 보강 | `src/parser/`, parser tests, stage/final report 갱신 | `npm test`, 실제 CLI smoke, model/favorite model 확인, privacy review, `git diff --check` |
 
 ## 문서 위치 확인
 
@@ -281,6 +282,53 @@ git diff --check
 Task #3 Stage 5: 실제 환경 smoke와 최종 정리
 ```
 
+## Stage 6 — stateful model tracking과 streak 차이 분석 보강
+
+### 산출물
+
+신규:
+
+- `mydocs/working/task_m010_3_stage6.md`
+
+수정:
+
+- `src/parser/session-jsonl.js`
+- `src/parser/model-aggregate.js`
+- `src/__tests__/fixtures/parser/README.md`
+- `src/__tests__/fixtures/parser/sessions/2026/06/12/evening.jsonl`
+- `src/__tests__/parser-activity.test.js`
+- `mydocs/report/task_m010_3_report.md`
+
+### 변경 내용
+
+- 실제 Codex session JSONL에서 `token_count`는 model을 직접 담지 않고, 같은 session file의 `turn_context`가 model을 담는 case를 지원한다.
+- model aggregate는 file boundary별로 current model을 유지하고, 뒤따르는 model-less `token_count`에 연결한다.
+- model alias는 `payload.model_info.slug`, `payload.model`, `payload.model_name`, `payload.info.model`, `payload.info.model_name` 순서로 허용한다.
+- diagnostic에는 file path, session id, prompt/response 원문을 넣지 않는다.
+- Codex profile streak와 local session JSONL streak의 산식 차이는 최종 보고서에 raw JSON 없이 기록한다.
+- Rust 전환은 이번 Stage에서 구현하지 않고, one-pass JS parser와 native core 검토를 후속 성능 후보로 남긴다.
+
+### 검증
+
+```bash
+npm test
+node bin/codex-usage-analyzer.js analyze --json
+node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
+git diff --check
+```
+
+수동 확인:
+
+- 실제 CLI smoke에서 `models`가 parsed field에 포함되는지 확인한다.
+- output privacy review 결과를 stage/final report에 기록한다.
+- profile streak와 local streak의 산식 차이를 raw JSON 없이 기록한다.
+
+### 커밋
+
+```text
+Task #3 Stage 6 + 최종 보고서: stateful model tracking 보강
+```
+
 ## 검증
 
 - 각 Stage 검증 명령은 단계 보고서 작성 전에 실행한다.
@@ -300,6 +348,7 @@ Task #3 Stage 5: 실제 환경 smoke와 최종 정리
 - Stage 3은 Stage 2의 token/daily aggregate와 diagnostics가 승인된 뒤 진행한다.
 - Stage 4는 Stage 2-3 parser가 tests로 고정된 뒤 production analyzer에 연결한다.
 - Stage 5는 Stage 4 통합 결과가 승인된 뒤 실제 환경 smoke와 최종 정리를 수행한다.
+- Stage 6은 Stage 5 이후 profile/tokscale 비교에서 발견된 model/streak 산식 차이를 PR 게시 전 보강한다.
 - 각 단계는 완료보고서 승인 후 다음 단계로 넘어간다.
 
 ## 위험과 대응
@@ -317,5 +366,6 @@ Task #3 Stage 5: 실제 환경 smoke와 최종 정리
 - session JSONL primary parser와 SQLite deep fallback 제외
 - Stage별 검증 명령과 privacy review 기준
 - 단계별 커밋 메시지
+- Stage 6 추가 보강 범위
 
 승인되면 Stage 1부터 진행한다.

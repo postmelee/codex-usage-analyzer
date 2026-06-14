@@ -8,6 +8,8 @@ They intentionally model only the allowlisted fields that the production parser 
 - `type`
 - `payload.type`
 - `payload.model`
+- `payload.model_name`
+- `payload.model_info.slug`
 - `payload.effort`
 - `payload.mode`
 - `payload.duration_ms`
@@ -28,6 +30,7 @@ The fixture set is designed to cover:
 - unknown event ignoring
 - multi-day daily buckets
 - multi-model ranking
+- model-bearing `turn_context` followed by model-less `token_count`
 - effort and fast-mode distribution candidates
 
 The deterministic parser tests should use a fixed `capturedAt` or `now` value instead of wall-clock time.
