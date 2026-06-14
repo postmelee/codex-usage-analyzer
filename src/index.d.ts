@@ -32,7 +32,8 @@ export interface CliIo {
 /**
  * Analyze usage into a production UsageSnapshot v2.
  *
- * Local session JSONL sources are parsed when available. Unavailable fields are
+ * Local session JSONL sources, including allowlisted usage and skill/plugin
+ * invocation events, are parsed when available. Unavailable fields are
  * represented with zero/null/empty values plus a namespaced diagnostic
  * extension. This function does not return the sample fixture.
  */

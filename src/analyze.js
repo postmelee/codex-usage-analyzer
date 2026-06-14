@@ -1,6 +1,7 @@
 import { sampleUsageSnapshotV2 } from "./fixtures/sample-v2-snapshot.js";
 import { aggregateActivityFromCodexHome } from "./parser/activity-aggregate.js";
 import { aggregateModelUsageFromCodexHome } from "./parser/model-aggregate.js";
+import { aggregateSkillPluginUsageFromCodexHome } from "./parser/skill-plugin-aggregate.js";
 import { aggregateTokenUsageFromCodexHome } from "./parser/token-aggregate.js";
 import {
   USAGE_SNAPSHOT_V2_SCHEMA_VERSION,
@@ -11,10 +12,16 @@ export const ANALYZER_NAME = "codex-usage-analyzer";
 export const ANALYZER_VERSION = "0.1.0";
 
 export async function analyzeUsage(options = {}) {
-  const [usageAggregate, modelAggregate, activityAggregate] = await Promise.all([
+  const [
+    usageAggregate,
+    modelAggregate,
+    activityAggregate,
+    skillPluginAggregate
+  ] = await Promise.all([
     aggregateTokenUsageFromCodexHome(options),
     aggregateModelUsageFromCodexHome(options),
-    aggregateActivityFromCodexHome(options)
+    aggregateActivityFromCodexHome(options),
+    aggregateSkillPluginUsageFromCodexHome(options)
   ]);
 
   const snapshot = createUnavailableUsageSnapshotV2({
@@ -37,9 +44,15 @@ export async function analyzeUsage(options = {}) {
     snapshot.activity = activityAggregate.activity;
   }
 
+  if (skillPluginAggregate.diagnostics.status === "ok") {
+    snapshot.skills = skillPluginAggregate.skills;
+    snapshot.plugins = skillPluginAggregate.plugins;
+  }
+
   snapshot.extensions["codexUsageAnalyzer.diagnostics"] = createAnalyzerDiagnostics({
     activity: activityAggregate,
     models: modelAggregate,
+    skillPlugin: skillPluginAggregate,
     usage: usageAggregate
   });
 
@@ -102,22 +115,17 @@ function createUnavailableTokenBreakdown() {
 }
 
 function createAnalyzerDiagnostics(aggregates) {
+  const skillPluginDiagnostics = aggregates.skillPlugin.diagnostics;
   const diagnostics = {
     usage: aggregates.usage.diagnostics,
     models: aggregates.models.diagnostics,
     activity: aggregates.activity.diagnostics,
-    skills: {
-      status: "unavailable",
-      reason: "local_source_not_identified"
-    },
-    plugins: {
-      status: "unavailable",
-      reason: "local_source_not_identified"
-    }
+    skills: skillPluginDiagnostics,
+    plugins: skillPluginDiagnostics
   };
 
   const parsedFields = [];
-  const unavailableFields = ["skills", "plugins"];
+  const unavailableFields = [];
 
   for (const field of ["usage", "models", "activity"]) {
     if (diagnostics[field].status === "ok") {
@@ -125,6 +133,12 @@ function createAnalyzerDiagnostics(aggregates) {
     } else {
       unavailableFields.push(field);
     }
+  }
+
+  if (skillPluginDiagnostics.status === "ok") {
+    parsedFields.push("skills", "plugins");
+  } else {
+    unavailableFields.push("skills", "plugins");
   }
 
   if (diagnostics.activity.status === "ok") {
@@ -169,6 +183,8 @@ function getAnalyzerDiagnosticReason(status, diagnostics) {
   return diagnostics.usage.reason
     ?? diagnostics.models.reason
     ?? diagnostics.activity.reason
+    ?? diagnostics.skills.reason
+    ?? diagnostics.plugins.reason
     ?? "local_sources_unavailable";
 }
 
