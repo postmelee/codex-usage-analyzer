@@ -68,6 +68,16 @@ test("analyzes usage into a production unavailable UsageSnapshot v2", async () =
     "session_jsonl_not_found"
   );
   assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].profileComparison,
+    {
+      status: "not_performed",
+      reason: "remote_profile_api_not_used",
+      localStreakBasis: "session_jsonl_utc_dates",
+      remoteProfileBasis: "codex_desktop_remote_profile_api",
+      parity: "not_guaranteed"
+    }
+  );
+  assert.deepEqual(
     snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
     ["skills", "plugins", "usage", "models", "activity"]
   );
@@ -127,6 +137,24 @@ test("analyzes parser fixture into a production UsageSnapshot v2", async () => {
   assert.deepEqual(
     snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
     ["skills", "plugins", "activity.fastModePercent"]
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].profileComparison,
+    {
+      status: "not_performed",
+      reason: "remote_profile_api_not_used",
+      localStreakBasis: "session_jsonl_utc_dates",
+      remoteProfileBasis: "codex_desktop_remote_profile_api",
+      parity: "not_guaranteed"
+    }
+  );
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].activity.streakDateBasis,
+    "utc_date_from_session_token_usage"
+  );
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].activity.profileParity,
+    "not_guaranteed"
   );
   assert.equal(JSON.stringify(snapshot).includes(parserFixtureDir), false);
   assert.equal(JSON.stringify(snapshot).includes("lineNumber"), false);

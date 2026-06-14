@@ -89,6 +89,9 @@ test("aggregates activity signals from session JSONL fixtures", async () => {
   assert.equal(result.diagnostics.ignoredEvents, 2);
   assert.deepEqual(result.diagnostics.unavailableFields, ["fastModePercent"]);
   assert.equal(result.diagnostics.fastModeReason, "source_unconfirmed");
+  assert.equal(result.diagnostics.streakDateBasis, "utc_date_from_session_token_usage");
+  assert.equal(result.diagnostics.profileParity, "not_guaranteed");
+  assert.equal(result.diagnostics.profileParityReason, "remote_profile_api_not_used");
   assert.equal(JSON.stringify(result.diagnostics).includes(parserFixtureCodexHome), false);
   assert.equal(JSON.stringify(result.diagnostics).includes("lineNumber"), false);
   assert.deepEqual(result.activity, {

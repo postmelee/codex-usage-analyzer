@@ -16,6 +16,10 @@ The production `analyze --json` path reads local Codex session JSONL files from 
 
 The parser currently derives token totals, daily token buckets, model ranking, longest task duration, streaks, reasoning effort, and total thread count from allowlisted session event fields. It does not emit raw local file paths, raw JSONL lines, session ids, prompts, or responses.
 
+Streak fields are local-only analyzer results. The current parser treats a UTC date as active when local session JSONL contains positive `last_token_usage` for that date.
+
+Codex Desktop's profile screen is backed by its remote profile data and may include account-level usage that is no longer present in local session files, usage from another device, or data retained after local cleanup. For that reason, `activity.currentStreakDays` and `activity.longestStreakDays` are not guaranteed to match the Codex Desktop profile. The diagnostic extension includes `profileComparison.parity: "not_guaranteed"` when the analyzer has not compared against a remote profile baseline.
+
 Local repository smoke command:
 
 ```bash
@@ -108,6 +112,7 @@ The test suite validates the SDK exports, production parser behavior, fixture-on
 This package does not:
 
 - perform GitHub OAuth
+- call internal Codex Desktop profile APIs
 - issue or store submit tokens
 - own public profile handles
 - render cards or images

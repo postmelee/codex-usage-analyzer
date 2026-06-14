@@ -14,6 +14,7 @@ GitHub Issue: [#3](https://github.com/postmelee/codex-usage-analyzer/issues/3)
 | 4 | analyzer integration, CLI/README, regression hardening | `src/analyze.js`, `README.md`, tests, `mydocs/working/task_m010_3_stage4.md` | `npm test`, 기본/fixture CLI 실행, `git diff --check` |
 | 5 | 실제 환경 smoke와 최종 정리 | `mydocs/working/task_m010_3_stage5.md`, `mydocs/report/task_m010_3_report.md` | `npm test`, 실제 CLI smoke, privacy review, `git diff --check` |
 | 6 | stateful model tracking과 streak 차이 분석 보강 | `src/parser/`, parser tests, stage/final report 갱신 | `npm test`, 실제 CLI smoke, model/favorite model 확인, privacy review, `git diff --check` |
+| 7 | local-only profile parity 진단과 문서화 | `src/analyze.js`, `src/parser/activity-aggregate.js`, tests, README, stage/final report 갱신 | `npm test`, fixture CLI smoke, `git diff --check` |
 
 ## 문서 위치 확인
 
@@ -329,6 +330,61 @@ git diff --check
 Task #3 Stage 6 + 최종 보고서: stateful model tracking 보강
 ```
 
+## Stage 7 — local-only profile parity 진단과 문서화
+
+### 산출물
+
+신규:
+
+- `mydocs/working/task_m010_3_stage7.md`
+
+수정:
+
+- `src/analyze.js`
+- `src/index.d.ts`
+- `src/parser/activity-aggregate.js`
+- `src/__tests__/analyze.test.js`
+- `src/__tests__/parser-activity.test.js`
+- `README.md`
+- `mydocs/plans/task_m010_3_impl.md`
+- `mydocs/report/task_m010_3_report.md`
+
+### 변경 내용
+
+- analyzer diagnostic에 remote profile comparison이 수행되지 않았음을 명시한다.
+  - `profileComparison.status: "not_performed"`
+  - `profileComparison.reason: "remote_profile_api_not_used"`
+  - `profileComparison.parity: "not_guaranteed"`
+- activity diagnostic에 streak 산식 기준을 명시한다.
+  - local session JSONL의 positive `last_token_usage`
+  - UTC date 기준
+  - Codex Desktop remote profile parity 미보장
+- README에 Codex Desktop profile과 analyzer streak가 달라질 수 있는 이유를 기록한다.
+  - local cleanup/migration/archive/delete로 session source가 빠질 수 있음
+  - remote profile은 account-level source일 수 있음
+  - analyzer는 internal Codex Desktop profile API를 호출하지 않음
+- 실제 사용자 profile tooltip 값과 raw local JSON은 문서에 보존하지 않고, 판단 근거만 요약한다.
+
+### 검증
+
+```bash
+npm test
+node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
+git diff --check
+```
+
+수동 확인:
+
+- diagnostic이 raw path, raw JSONL line, session id, prompt/response를 포함하지 않는지 확인한다.
+- README가 `longestStreakDays`를 Codex Desktop profile 복제값으로 오해하게 만들지 않는지 확인한다.
+- remote profile API 호출을 기본 동작으로 추가하지 않았는지 확인한다.
+
+### 커밋
+
+```text
+Task #3 Stage 7: local profile parity diagnostic 보강
+```
+
 ## 검증
 
 - 각 Stage 검증 명령은 단계 보고서 작성 전에 실행한다.
@@ -349,6 +405,7 @@ Task #3 Stage 6 + 최종 보고서: stateful model tracking 보강
 - Stage 4는 Stage 2-3 parser가 tests로 고정된 뒤 production analyzer에 연결한다.
 - Stage 5는 Stage 4 통합 결과가 승인된 뒤 실제 환경 smoke와 최종 정리를 수행한다.
 - Stage 6은 Stage 5 이후 profile/tokscale 비교에서 발견된 model/streak 산식 차이를 PR 게시 전 보강한다.
+- Stage 7은 Stage 6 이후 사용자가 제공한 profile tooltip과 local source 차이를 기본 동작 변경 없이 diagnostic/documentation으로 고정한다.
 - 각 단계는 완료보고서 승인 후 다음 단계로 넘어간다.
 
 ## 위험과 대응
@@ -358,6 +415,7 @@ Task #3 Stage 6 + 최종 보고서: stateful model tracking 보강
 - **민감정보 노출**: raw line/payload/path/session id/thread title/cwd를 snapshot과 report에 넣지 않는다.
 - **실제 환경 smoke 불안정**: 실제 source가 없거나 unreadable이면 실패가 아니라 unavailable diagnostic으로 처리한다.
 - **범위 침범**: skills/plugins, avatar/pet, remote profile smoke는 #4-#6으로 유지한다.
+- **remote profile 불일치**: Codex Desktop profile API 호출은 기본 analyzer 범위에서 제외하고, local-only 산식과 parity 미보장을 diagnostic/README에 명시한다.
 
 ## 승인 요청 사항
 
@@ -367,5 +425,6 @@ Task #3 Stage 6 + 최종 보고서: stateful model tracking 보강
 - Stage별 검증 명령과 privacy review 기준
 - 단계별 커밋 메시지
 - Stage 6 추가 보강 범위
+- Stage 7 local-only profile parity 진단과 문서화 범위
 
 승인되면 Stage 1부터 진행한다.

@@ -144,6 +144,13 @@ function createAnalyzerDiagnostics(aggregates) {
     reason: getAnalyzerDiagnosticReason(status, diagnostics),
     parser: "session_jsonl",
     source: diagnostics.usage.source,
+    profileComparison: {
+      status: "not_performed",
+      reason: "remote_profile_api_not_used",
+      localStreakBasis: "session_jsonl_utc_dates",
+      remoteProfileBasis: "codex_desktop_remote_profile_api",
+      parity: "not_guaranteed"
+    },
     parsedFields,
     unavailableFields,
     ...diagnostics

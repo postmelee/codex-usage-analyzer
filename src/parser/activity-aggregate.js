@@ -78,6 +78,9 @@ function createAggregateState(now) {
       fileErrors: 0,
       unavailableFields: ["fastModePercent"],
       fastModeReason: "source_unconfirmed",
+      streakDateBasis: "utc_date_from_session_token_usage",
+      profileParity: "not_guaranteed",
+      profileParityReason: "remote_profile_api_not_used",
       discovery: []
     },
     effortCounts: new Map(),
