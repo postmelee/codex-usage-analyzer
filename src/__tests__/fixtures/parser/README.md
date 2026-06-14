@@ -13,6 +13,8 @@ They intentionally model only the allowlisted fields that the production parser 
 - `payload.duration_ms`
 - `payload.last_token_usage`
 - `payload.total_token_usage`
+- `payload.info.last_token_usage`
+- `payload.info.total_token_usage`
 
 Do not add prompts, responses, cwd values, local absolute paths, account identifiers, credential-like strings, or real session ids to this directory.
 

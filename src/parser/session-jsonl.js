@@ -80,14 +80,16 @@ export function normalizeSessionTokenCountEvent(event) {
     return null;
   }
 
+  const info = isRecord(payload.info) ? payload.info : null;
+
   return {
     durationMs: payload.duration_ms,
     effort: payload.effort,
-    lastTokenUsage: isRecord(payload.last_token_usage) ? payload.last_token_usage : null,
+    lastTokenUsage: readRecordAlias(payload, info, "last_token_usage"),
     mode: payload.mode,
     model: payload.model,
     timestamp: event.timestamp,
-    totalTokenUsage: isRecord(payload.total_token_usage) ? payload.total_token_usage : null
+    totalTokenUsage: readRecordAlias(payload, info, "total_token_usage")
   };
 }
 
@@ -116,4 +118,16 @@ async function collectJsonlFiles(directory, files, diagnostics) {
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function readRecordAlias(primary, secondary, key) {
+  if (isRecord(primary[key])) {
+    return primary[key];
+  }
+
+  if (isRecord(secondary?.[key])) {
+    return secondary[key];
+  }
+
+  return null;
 }
