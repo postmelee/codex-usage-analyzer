@@ -1,4 +1,7 @@
 import { sampleUsageSnapshotV2 } from "./fixtures/sample-v2-snapshot.js";
+import { aggregateActivityFromCodexHome } from "./parser/activity-aggregate.js";
+import { aggregateModelUsageFromCodexHome } from "./parser/model-aggregate.js";
+import { aggregateTokenUsageFromCodexHome } from "./parser/token-aggregate.js";
 import {
   USAGE_SNAPSHOT_V2_SCHEMA_VERSION,
   assertUsageSnapshotV2
@@ -8,13 +11,39 @@ export const ANALYZER_NAME = "codex-usage-analyzer";
 export const ANALYZER_VERSION = "0.1.0";
 
 export async function analyzeUsage(options = {}) {
-  return assertUsageSnapshotV2(createUnavailableUsageSnapshotV2({
+  const [usageAggregate, modelAggregate, activityAggregate] = await Promise.all([
+    aggregateTokenUsageFromCodexHome(options),
+    aggregateModelUsageFromCodexHome(options),
+    aggregateActivityFromCodexHome(options)
+  ]);
+
+  const snapshot = createUnavailableUsageSnapshotV2({
     capturedAt: normalizeCapturedAt(options.capturedAt),
     producer: {
       name: ANALYZER_NAME,
       version: ANALYZER_VERSION
     }
-  }));
+  });
+
+  if (usageAggregate.diagnostics.status === "ok") {
+    snapshot.usage = usageAggregate.usage;
+  }
+
+  if (modelAggregate.diagnostics.status === "ok") {
+    snapshot.models = modelAggregate.models;
+  }
+
+  if (activityAggregate.diagnostics.status === "ok") {
+    snapshot.activity = activityAggregate.activity;
+  }
+
+  snapshot.extensions["codexUsageAnalyzer.diagnostics"] = createAnalyzerDiagnostics({
+    activity: activityAggregate,
+    models: modelAggregate,
+    usage: usageAggregate
+  });
+
+  return assertUsageSnapshotV2(snapshot);
 }
 
 function createUnavailableUsageSnapshotV2(overrides = {}) {
@@ -55,7 +84,7 @@ function createUnavailableUsageSnapshotV2(overrides = {}) {
     extensions: {
       "codexUsageAnalyzer.diagnostics": {
         status: "unavailable",
-        reason: "local_parser_not_implemented",
+        reason: "local_sources_unavailable",
         unavailableFields: ["usage", "models", "activity", "skills", "plugins"]
       }
     }
@@ -70,6 +99,70 @@ function createUnavailableTokenBreakdown() {
     cacheWriteTokens: null,
     reasoningTokens: null
   };
+}
+
+function createAnalyzerDiagnostics(aggregates) {
+  const diagnostics = {
+    usage: aggregates.usage.diagnostics,
+    models: aggregates.models.diagnostics,
+    activity: aggregates.activity.diagnostics,
+    skills: {
+      status: "unavailable",
+      reason: "local_source_not_identified"
+    },
+    plugins: {
+      status: "unavailable",
+      reason: "local_source_not_identified"
+    }
+  };
+
+  const parsedFields = [];
+  const unavailableFields = ["skills", "plugins"];
+
+  for (const field of ["usage", "models", "activity"]) {
+    if (diagnostics[field].status === "ok") {
+      parsedFields.push(field);
+    } else {
+      unavailableFields.push(field);
+    }
+  }
+
+  if (diagnostics.activity.status === "ok") {
+    for (const field of diagnostics.activity.unavailableFields ?? []) {
+      unavailableFields.push(`activity.${field}`);
+    }
+  }
+
+  const status = parsedFields.length === 0
+    ? "unavailable"
+    : unavailableFields.length > 0
+      ? "partial"
+      : "ok";
+
+  return {
+    status,
+    reason: getAnalyzerDiagnosticReason(status, diagnostics),
+    parser: "session_jsonl",
+    source: diagnostics.usage.source,
+    parsedFields,
+    unavailableFields,
+    ...diagnostics
+  };
+}
+
+function getAnalyzerDiagnosticReason(status, diagnostics) {
+  if (status === "ok") {
+    return null;
+  }
+
+  if (status === "partial") {
+    return "local_sources_partially_available";
+  }
+
+  return diagnostics.usage.reason
+    ?? diagnostics.models.reason
+    ?? diagnostics.activity.reason
+    ?? "local_sources_unavailable";
 }
 
 export function createSampleUsageSnapshotV2(overrides = {}) {

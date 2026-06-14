@@ -5,7 +5,7 @@ import {
 
 const USAGE = [
   "Usage:",
-  "  codex-usage-analyzer analyze --json",
+  "  codex-usage-analyzer analyze --json [--codex-home <path>]",
   "  codex-usage-analyzer analyze --json --fixture-sample"
 ].join("\n");
 
@@ -25,20 +25,51 @@ export async function runCli(argv, io = {}) {
     return 1;
   }
 
-  const hasJsonFlag = flags.includes("--json");
-  const hasFixtureSampleFlag = flags.includes("--fixture-sample");
-  const unknownFlags = flags.filter((flag) => {
-    return flag !== "--json" && flag !== "--fixture-sample";
-  });
-
-  if (!hasJsonFlag || unknownFlags.length > 0) {
+  const parsedFlags = parseAnalyzeFlags(flags);
+  if (!parsedFlags.ok) {
     stderr.write(`${USAGE}\n`);
     return 1;
   }
 
-  const snapshot = hasFixtureSampleFlag
+  const snapshot = parsedFlags.fixtureSample
     ? createSampleUsageSnapshotV2()
-    : await analyzeUsage();
+    : await analyzeUsage({
+      codexHome: parsedFlags.codexHome
+    });
   stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`);
   return 0;
+}
+
+function parseAnalyzeFlags(flags) {
+  const parsed = {
+    codexHome: null,
+    fixtureSample: false,
+    hasJson: false,
+    ok: true
+  };
+
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = flags[index];
+
+    if (flag === "--json") {
+      parsed.hasJson = true;
+    } else if (flag === "--fixture-sample") {
+      parsed.fixtureSample = true;
+    } else if (flag === "--codex-home") {
+      const value = flags[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return { ok: false };
+      }
+
+      parsed.codexHome = value;
+      index += 1;
+    } else {
+      return { ok: false };
+    }
+  }
+
+  return {
+    ...parsed,
+    ok: parsed.hasJson
+  };
 }

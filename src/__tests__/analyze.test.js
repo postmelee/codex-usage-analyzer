@@ -14,11 +14,14 @@ import {
 } from "../index.js";
 
 const parserFixtureDir = fileURLToPath(new URL("./fixtures/parser", import.meta.url));
+const missingParserFixtureDir = fileURLToPath(new URL("./fixtures/parser-missing", import.meta.url));
 const forbiddenParserFixturePattern = /\/Users\/|\/home\/|\/private\/var\/|access_token|refresh_token|Bearer |sk-|github_pat_/;
 
 test("analyzes usage into a production unavailable UsageSnapshot v2", async () => {
   const before = Date.now();
-  const snapshot = await analyzeUsage();
+  const snapshot = await analyzeUsage({
+    codexHome: missingParserFixtureDir
+  });
   const after = Date.now();
   const result = validateUsageSnapshotV2(snapshot);
 
@@ -59,19 +62,74 @@ test("analyzes usage into a production unavailable UsageSnapshot v2", async () =
   assert.equal(snapshot.codexProfile, undefined);
   assert.equal(snapshot.codexAssets, undefined);
   assert.equal(snapshot.extensions["codexUsageAnalyzer.fixture"], undefined);
-  assert.deepEqual(snapshot.extensions["codexUsageAnalyzer.diagnostics"], {
-    status: "unavailable",
-    reason: "local_parser_not_implemented",
-    unavailableFields: ["usage", "models", "activity", "skills", "plugins"]
-  });
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].status, "unavailable");
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].reason,
+    "session_jsonl_not_found"
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
+    ["skills", "plugins", "usage", "models", "activity"]
+  );
 });
 
 test("normalizes capturedAt for the production unavailable snapshot", async () => {
   const snapshot = await analyzeUsage({
-    capturedAt: "2026-06-13T00:00:00.000Z"
+    capturedAt: "2026-06-13T00:00:00.000Z",
+    codexHome: missingParserFixtureDir
   });
 
   assert.equal(snapshot.capturedAt, "2026-06-13T00:00:00.000Z");
+});
+
+test("analyzes parser fixture into a production UsageSnapshot v2", async () => {
+  const snapshot = await analyzeUsage({
+    capturedAt: "2026-06-13T00:00:00.000Z",
+    codexHome: parserFixtureDir,
+    now: "2026-06-12T23:59:59.000Z"
+  });
+  const result = validateUsageSnapshotV2(snapshot);
+
+  assert.equal(result.ok, true, result.errors.join("\n"));
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.fixture"], undefined);
+  assert.equal(snapshot.usage.totalTokens, 6780);
+  assert.equal(snapshot.usage.peakDailyTokens, 3680);
+  assert.equal(snapshot.usage.daily.length, 3);
+  assert.equal(snapshot.models.favoriteModel.model, "gpt-5-codex");
+  assert.equal(snapshot.models.favoriteModel.totalTokens, 5230);
+  assert.equal(snapshot.models.items.length, 2);
+  assert.deepEqual(snapshot.activity, {
+    longestTaskDurationMs: 240000,
+    currentStreakDays: 3,
+    longestStreakDays: 3,
+    fastModePercent: null,
+    reasoningEffort: "high",
+    reasoningEffortPercent: 40,
+    totalThreads: 3
+  });
+  assert.deepEqual(snapshot.skills, {
+    exploredCount: null,
+    totalUsed: null,
+    topSkills: []
+  });
+  assert.deepEqual(snapshot.plugins, {
+    topPlugins: []
+  });
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].status, "partial");
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].reason,
+    "local_sources_partially_available"
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].parsedFields,
+    ["usage", "models", "activity"]
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
+    ["skills", "plugins", "activity.fastModePercent"]
+  );
+  assert.equal(JSON.stringify(snapshot).includes(parserFixtureDir), false);
+  assert.equal(JSON.stringify(snapshot).includes("lineNumber"), false);
 });
 
 test("creates a sample UsageSnapshot v2 with safe overrides", () => {

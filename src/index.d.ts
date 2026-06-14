@@ -11,7 +11,7 @@ export interface AnalyzeUsageOptions {
    */
   capturedAt?: string | Date | null;
   /**
-   * Local Codex home root for parser source discovery. Reserved for parser integration.
+   * Local Codex home root for parser source discovery.
    */
   codexHome?: string | null;
   /**
