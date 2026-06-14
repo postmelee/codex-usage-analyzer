@@ -12,12 +12,24 @@ npx codex-usage-analyzer@latest analyze --json
 
 The `--json` mode writes a single `UsageSnapshot v2` object to stdout. Errors and usage text are written to stderr.
 
-Until the real local parser lands, the production `analyze --json` path emits a valid unavailable snapshot: required numeric totals are zero, unavailable details are `null` or empty arrays, and `extensions["codexUsageAnalyzer.diagnostics"]` explains that the local parser is not implemented yet. The production path does not return the sample fixture.
+The production `analyze --json` path reads local Codex session JSONL files from the Codex home directory. It uses `--codex-home <path>` when provided, otherwise `CODEX_HOME`, otherwise the default Codex home. When the session source is missing or unreadable, the command still emits a valid unavailable snapshot: required numeric totals are zero, unavailable details are `null` or empty arrays, and `extensions["codexUsageAnalyzer.diagnostics"]` explains the unavailable source. The production path does not return the sample fixture.
+
+The parser currently derives token totals, daily token buckets, model ranking, longest task duration, streaks, reasoning effort, and total thread count from allowlisted session event fields. It does not emit raw local file paths, raw JSONL lines, session ids, prompts, or responses.
+
+Streak fields are local-only analyzer results. The current parser treats a UTC date as active when local session JSONL contains positive `last_token_usage` for that date.
+
+Codex Desktop's profile screen is backed by its remote profile data and may include account-level usage that is no longer present in local session files, usage from another device, or data retained after local cleanup. For that reason, `activity.currentStreakDays` and `activity.longestStreakDays` are not guaranteed to match the Codex Desktop profile. The diagnostic extension includes `profileComparison.parity: "not_guaranteed"` when the analyzer has not compared against a remote profile baseline.
 
 Local repository smoke command:
 
 ```bash
 node bin/codex-usage-analyzer.js analyze --json
+```
+
+Parser fixture smoke command:
+
+```bash
+node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
 ```
 
 Development fixture command:
@@ -42,7 +54,15 @@ const snapshot = await analyzeUsage();
 assertUsageSnapshotV2(snapshot);
 ```
 
-`analyzeUsage()` returns the production analyzer result. While the real local source parser is implemented in later tasks, unavailable fields use zero, `null`, empty arrays, and a namespaced diagnostic extension rather than sample values.
+`analyzeUsage()` returns the production analyzer result. You can pass `codexHome` for deterministic tests or custom Codex home discovery:
+
+```js
+const snapshot = await analyzeUsage({
+  codexHome: "/path/to/codex-home"
+});
+```
+
+When a local source is unavailable, fields use zero, `null`, empty arrays, and a namespaced diagnostic extension rather than sample values.
 
 Use `createSampleUsageSnapshotV2()` only for examples, tests, and contract inspection.
 
@@ -81,16 +101,18 @@ Wrapper metadata such as bearer tokens, device ids, account handles, visibility,
 ```bash
 npm test
 node bin/codex-usage-analyzer.js analyze --json
+node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
 node bin/codex-usage-analyzer.js analyze --json --fixture-sample
 ```
 
-The test suite validates the SDK exports, production CLI behavior, fixture-only CLI behavior, and `UsageSnapshot v2` schema rules.
+The test suite validates the SDK exports, production parser behavior, fixture-only CLI behavior, and `UsageSnapshot v2` schema rules.
 
 ## Non-Goals
 
 This package does not:
 
 - perform GitHub OAuth
+- call internal Codex Desktop profile APIs
 - issue or store submit tokens
 - own public profile handles
 - render cards or images
@@ -100,4 +122,4 @@ This package does not:
 
 ## Status
 
-This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and the real local source parser are follow-up work.
+This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and additional local sources for skills/plugins are follow-up work.
