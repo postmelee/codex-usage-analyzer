@@ -14,11 +14,13 @@ The `--json` mode writes a single `UsageSnapshot v2` object to stdout. Errors an
 
 The production `analyze --json` path reads local Codex session JSONL files from the Codex home directory. It uses `--codex-home <path>` when provided, otherwise `CODEX_HOME`, otherwise the default Codex home. When the session source is missing or unreadable, the command still emits a valid unavailable snapshot: required numeric totals are zero, unavailable details are `null` or empty arrays, and `extensions["codexUsageAnalyzer.diagnostics"]` explains the unavailable source. The production path does not return the sample fixture.
 
-The parser currently derives token totals, daily token buckets, model ranking, longest task duration, streaks, reasoning effort, and total thread count from allowlisted session event fields. It does not emit raw local file paths, raw JSONL lines, session ids, prompts, or responses.
+The parser currently derives token totals, daily token buckets, model ranking, skill/plugin ranking, longest task duration, streaks, reasoning effort, and total thread count from allowlisted session event fields. Skill/plugin rankings are counted only from actual invocation events that can be classified by session tool catalog metadata; catalog or enabled-tool lists alone do not increment usage. Custom/local skill and plugin names may appear in `topSkills` and `topPlugins`, but the analyzer does not emit raw local file paths, raw JSONL lines, session ids, prompts, responses, tool input, or tool output.
 
 Streak fields are local-only analyzer results. The current parser treats a UTC date as active when local session JSONL contains positive `last_token_usage` for that date.
 
 Codex Desktop's profile screen is backed by its remote profile data and may include account-level usage that is no longer present in local session files, usage from another device, or data retained after local cleanup. For that reason, `activity.currentStreakDays` and `activity.longestStreakDays` are not guaranteed to match the Codex Desktop profile. The diagnostic extension includes `profileComparison.parity: "not_guaranteed"` when the analyzer has not compared against a remote profile baseline.
+
+The analyzer does not call Codex Desktop remote profile APIs or plugin-store APIs. `skills` and `plugins` are local session-derived fields, so they are unavailable when actual invocation source events are absent.
 
 Local repository smoke command:
 
@@ -122,4 +124,4 @@ This package does not:
 
 ## Status
 
-This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and additional local sources for skills/plugins are follow-up work.
+This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and broader parity work against Codex Desktop profile data are follow-up work.

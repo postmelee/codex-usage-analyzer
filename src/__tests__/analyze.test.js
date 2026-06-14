@@ -14,6 +14,7 @@ import {
 } from "../index.js";
 
 const parserFixtureDir = fileURLToPath(new URL("./fixtures/parser", import.meta.url));
+const skillPluginFixtureDir = fileURLToPath(new URL("./fixtures/skill-plugin", import.meta.url));
 const missingParserFixtureDir = fileURLToPath(new URL("./fixtures/parser-missing", import.meta.url));
 const forbiddenParserFixturePattern = /\/Users\/|\/home\/|\/private\/var\/|access_token|refresh_token|Bearer |sk-|github_pat_/;
 
@@ -79,7 +80,7 @@ test("analyzes usage into a production unavailable UsageSnapshot v2", async () =
   );
   assert.deepEqual(
     snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
-    ["skills", "plugins", "usage", "models", "activity"]
+    ["usage", "models", "activity", "skills", "plugins"]
   );
 });
 
@@ -160,6 +161,89 @@ test("analyzes parser fixture into a production UsageSnapshot v2", async () => {
   assert.equal(JSON.stringify(snapshot).includes("lineNumber"), false);
 });
 
+test("analyzes skill plugin fixture into a production UsageSnapshot v2", async () => {
+  const snapshot = await analyzeUsage({
+    capturedAt: "2026-06-13T00:00:00.000Z",
+    codexHome: skillPluginFixtureDir,
+    now: "2026-06-12T23:59:59.000Z"
+  });
+  const result = validateUsageSnapshotV2(snapshot);
+
+  assert.equal(result.ok, true, result.errors.join("\n"));
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.fixture"], undefined);
+  assert.equal(snapshot.usage.totalTokens, 0);
+  assert.equal(snapshot.usage.peakDailyTokens, null);
+  assert.deepEqual(snapshot.usage.daily, []);
+  assert.equal(snapshot.models.favoriteModel, null);
+  assert.deepEqual(snapshot.models.items, []);
+  assert.deepEqual(snapshot.activity, {
+    longestTaskDurationMs: null,
+    currentStreakDays: null,
+    longestStreakDays: null,
+    fastModePercent: null,
+    reasoningEffort: null,
+    reasoningEffortPercent: null,
+    totalThreads: 1
+  });
+  assert.deepEqual(snapshot.skills, {
+    exploredCount: 2,
+    totalUsed: 4,
+    topSkills: [
+      {
+        id: "skill_alpha",
+        name: "skill_alpha",
+        displayName: "skill_alpha",
+        usageCount: 2
+      },
+      {
+        id: "skill_beta",
+        name: "skill_beta",
+        displayName: "skill_beta",
+        usageCount: 2
+      }
+    ]
+  });
+  assert.deepEqual(snapshot.plugins, {
+    topPlugins: [
+      {
+        id: "plugin_pack/plugin_alpha",
+        name: "plugin_alpha",
+        displayName: "plugin_alpha",
+        usageCount: 2
+      },
+      {
+        id: "plugin_pack/plugin_beta",
+        name: "plugin_beta",
+        displayName: "plugin_beta",
+        usageCount: 1
+      }
+    ]
+  });
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].status, "partial");
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].reason,
+    "local_sources_partially_available"
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].parsedFields,
+    ["activity", "skills", "plugins"]
+  );
+  assert.deepEqual(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].unavailableFields,
+    ["usage", "models", "activity.fastModePercent"]
+  );
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].skills.status, "ok");
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].plugins.status, "ok");
+  assert.equal(
+    snapshot.extensions["codexUsageAnalyzer.diagnostics"].skills.classificationBasis,
+    "actual_invocation_with_session_catalog"
+  );
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].skills.actualInvocationEvents, 8);
+  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].skills.unclassifiedInvocations, 1);
+  assert.equal(JSON.stringify(snapshot).includes(skillPluginFixtureDir), false);
+  assert.equal(JSON.stringify(snapshot).includes("lineNumber"), false);
+});
+
 test("creates a sample UsageSnapshot v2 with safe overrides", () => {
   const snapshot = createSampleUsageSnapshotV2({
     capturedAt: "2026-06-13T00:00:00.000Z",
@@ -182,11 +266,13 @@ test("creates a sample UsageSnapshot v2 with safe overrides", () => {
 test("keeps parser source fixtures synthetic and private-safe", () => {
   const matches = [];
 
-  for (const fixturePath of listFixtureFiles(parserFixtureDir)) {
-    const content = readFileSync(fixturePath, "utf8");
+  for (const fixtureRoot of [parserFixtureDir, skillPluginFixtureDir]) {
+    for (const fixturePath of listFixtureFiles(fixtureRoot)) {
+      const content = readFileSync(fixturePath, "utf8");
 
-    if (forbiddenParserFixturePattern.test(content)) {
-      matches.push(fixturePath);
+      if (forbiddenParserFixturePattern.test(content)) {
+        matches.push(fixturePath);
+      }
     }
   }
 

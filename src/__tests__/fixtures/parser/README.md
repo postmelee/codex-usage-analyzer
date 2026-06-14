@@ -1,6 +1,9 @@
 # Parser Fixture Contract
 
 These fixtures are synthetic session JSONL files for Task #3 parser tests.
+Task #4 skill/plugin invocation tests use a separate fixture root at
+`src/__tests__/fixtures/skill-plugin/` so the core usage/model/activity
+regression counts in this directory stay stable.
 
 They intentionally model only the allowlisted fields that the production parser may aggregate:
 

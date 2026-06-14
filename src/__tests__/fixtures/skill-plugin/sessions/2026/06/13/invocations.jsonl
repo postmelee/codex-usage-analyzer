@@ -1,0 +1,9 @@
+{"timestamp":"2026-06-13T09:00:00.000Z","type":"session_meta","payload":{"dynamic_tools":[{"name":"skill_alpha","deferLoading":false},{"name":"skill_beta","deferLoading":false},{"name":"plugin_alpha","namespace":"plugin_pack","deferLoading":false},{"name":"plugin_beta","namespace":"plugin_pack","deferLoading":false}]}}
+{"timestamp":"2026-06-13T09:01:00.000Z","type":"response_item","payload":{"type":"function_call","name":"skill_alpha","status":"completed"}}
+{"timestamp":"2026-06-13T09:02:00.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"skill_alpha","status":"completed"}}
+{"timestamp":"2026-06-13T09:03:00.000Z","type":"response_item","payload":{"type":"function_call","name":"skill_beta","status":"completed"}}
+{"timestamp":"2026-06-13T09:04:00.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"skill_beta","status":"completed"}}
+{"timestamp":"2026-06-13T09:05:00.000Z","type":"response_item","payload":{"type":"function_call","name":"plugin_alpha","status":"completed"}}
+{"timestamp":"2026-06-13T09:06:00.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"plugin_alpha","status":"completed"}}
+{"timestamp":"2026-06-13T09:07:00.000Z","type":"event_msg","payload":{"type":"dynamic_tool_call_request","tool":"plugin_beta","namespace":"plugin_pack"}}
+{"timestamp":"2026-06-13T09:08:00.000Z","type":"response_item","payload":{"type":"function_call","name":"uncatalogued_tool","status":"completed"}}

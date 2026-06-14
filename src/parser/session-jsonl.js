@@ -95,6 +95,70 @@ export function normalizeSessionTokenCountEvent(event) {
   };
 }
 
+export function normalizeSessionToolCatalogEvent(event) {
+  if (!isRecord(event) || event.type !== "session_meta") {
+    return null;
+  }
+
+  const payload = isRecord(event.payload) ? event.payload : null;
+  if (payload === null || !Array.isArray(payload.dynamic_tools)) {
+    return null;
+  }
+
+  const items = [];
+  for (const item of payload.dynamic_tools) {
+    if (!isRecord(item)) {
+      continue;
+    }
+
+    const name = readStringAlias(item.name);
+    if (name === null) {
+      continue;
+    }
+
+    items.push({
+      name,
+      namespace: readStringAlias(item.namespace)
+    });
+  }
+
+  return items.length > 0 ? { items } : null;
+}
+
+export function normalizeSessionToolInvocationEvent(event) {
+  if (!isRecord(event)) {
+    return null;
+  }
+
+  const payload = isRecord(event.payload) ? event.payload : null;
+  if (payload === null) {
+    return null;
+  }
+
+  if (
+    event.type === "response_item"
+    && (payload.type === "function_call" || payload.type === "custom_tool_call")
+  ) {
+    const name = readStringAlias(payload.name);
+    return name === null ? null : {
+      kind: "named_call",
+      name,
+      namespace: null
+    };
+  }
+
+  if (event.type === "event_msg" && payload.type === "dynamic_tool_call_request") {
+    const name = readStringAlias(payload.tool);
+    return name === null ? null : {
+      kind: "dynamic_request",
+      name,
+      namespace: readStringAlias(payload.namespace)
+    };
+  }
+
+  return null;
+}
+
 export function extractSessionModel(event) {
   if (!isRecord(event)) {
     return null;
