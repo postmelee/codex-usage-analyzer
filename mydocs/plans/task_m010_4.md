@@ -69,6 +69,8 @@ Codex Desktop profile은 remote stats의 `top_invocations`, `unique_skills_used`
 
 신규:
 
+- `src/__tests__/fixtures/skill-plugin/README.md`
+- `src/__tests__/fixtures/skill-plugin/sessions/2026/06/13/invocations.jsonl`
 - `src/parser/skill-plugin-aggregate.js`
 - `src/__tests__/parser-skill-plugin.test.js`
 - `mydocs/plans/task_m010_4_impl.md`
@@ -84,7 +86,6 @@ Codex Desktop profile은 remote stats의 `top_invocations`, `unique_skills_used`
 - `src/analyze.js`
 - `src/parser/session-jsonl.js`
 - `src/__tests__/fixtures/parser/README.md`
-- `src/__tests__/fixtures/parser/sessions/2026/06/12/evening.jsonl`
 - `src/__tests__/analyze.test.js`
 - `mydocs/orders/20260614.md`
 - `mydocs/plans/task_m010_4.md`

@@ -31,13 +31,15 @@ GitHub Issue: [#4](https://github.com/postmelee/codex-usage-analyzer/issues/4)
 
 신규:
 
+- `src/__tests__/fixtures/skill-plugin/README.md`
+- `src/__tests__/fixtures/skill-plugin/sessions/2026/06/13/invocations.jsonl`
 - `mydocs/working/task_m010_4_stage1.md`
 
 수정:
 
 - `src/__tests__/fixtures/parser/README.md`
-- `src/__tests__/fixtures/parser/sessions/2026/06/12/evening.jsonl`
-- 필요 시 `src/__tests__/fixtures/parser/sessions/2026/06/11/afternoon.jsonl`
+- `mydocs/plans/task_m010_4.md`
+- `mydocs/plans/task_m010_4_impl.md`
 
 ### 변경 내용
 
@@ -46,6 +48,7 @@ GitHub Issue: [#4](https://github.com/postmelee/codex-usage-analyzer/issues/4)
   - prompt, response, tool input/output body, cwd, raw local path, credential은 읽거나 문서화하지 않는다.
   - source가 catalog/enabled 목록인지 actual invocation인지 분리한다.
 - parser fixture contract를 확장한다.
+  - #3 core parser fixture와 분리된 #4 전용 synthetic fixture root를 사용한다.
   - synthetic event만 추가한다.
   - actual invocation으로 볼 수 있는 allowlisted shape만 fixture에 포함한다.
   - skill/plugin/unknown classification case를 만든다.
