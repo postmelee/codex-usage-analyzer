@@ -1,5 +1,6 @@
 import { sampleUsageSnapshotV2 } from "./fixtures/sample-v2-snapshot.js";
 import { aggregateActivityFromCodexHome } from "./parser/activity-aggregate.js";
+import { aggregateCodexAssetsFromCodexHome } from "./parser/asset-aggregate.js";
 import { aggregateModelUsageFromCodexHome } from "./parser/model-aggregate.js";
 import { aggregateSkillPluginUsageFromCodexHome } from "./parser/skill-plugin-aggregate.js";
 import { aggregateTokenUsageFromCodexHome } from "./parser/token-aggregate.js";
@@ -16,12 +17,14 @@ export async function analyzeUsage(options = {}) {
     usageAggregate,
     modelAggregate,
     activityAggregate,
-    skillPluginAggregate
+    skillPluginAggregate,
+    assetAggregate
   ] = await Promise.all([
     aggregateTokenUsageFromCodexHome(options),
     aggregateModelUsageFromCodexHome(options),
     aggregateActivityFromCodexHome(options),
-    aggregateSkillPluginUsageFromCodexHome(options)
+    aggregateSkillPluginUsageFromCodexHome(options),
+    aggregateCodexAssetsFromCodexHome(options)
   ]);
 
   const snapshot = createUnavailableUsageSnapshotV2({
@@ -49,8 +52,13 @@ export async function analyzeUsage(options = {}) {
     snapshot.plugins = skillPluginAggregate.plugins;
   }
 
+  if (assetAggregate.diagnostics.status === "ok") {
+    snapshot.codexAssets = assetAggregate.codexAssets;
+  }
+
   snapshot.extensions["codexUsageAnalyzer.diagnostics"] = createAnalyzerDiagnostics({
     activity: activityAggregate,
+    assets: assetAggregate,
     models: modelAggregate,
     skillPlugin: skillPluginAggregate,
     usage: usageAggregate
@@ -121,7 +129,8 @@ function createAnalyzerDiagnostics(aggregates) {
     models: aggregates.models.diagnostics,
     activity: aggregates.activity.diagnostics,
     skills: skillPluginDiagnostics,
-    plugins: skillPluginDiagnostics
+    plugins: skillPluginDiagnostics,
+    codexAssets: aggregates.assets.diagnostics
   };
 
   const parsedFields = [];
@@ -139,6 +148,12 @@ function createAnalyzerDiagnostics(aggregates) {
     parsedFields.push("skills", "plugins");
   } else {
     unavailableFields.push("skills", "plugins");
+  }
+
+  if (diagnostics.codexAssets.status === "ok") {
+    parsedFields.push("codexAssets");
+  } else {
+    unavailableFields.push("codexAssets");
   }
 
   if (diagnostics.activity.status === "ok") {
@@ -185,6 +200,7 @@ function getAnalyzerDiagnosticReason(status, diagnostics) {
     ?? diagnostics.activity.reason
     ?? diagnostics.skills.reason
     ?? diagnostics.plugins.reason
+    ?? diagnostics.codexAssets.reason
     ?? "local_sources_unavailable";
 }
 
