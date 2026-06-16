@@ -32,13 +32,13 @@
   "expected": {
     "usage": {
       "totalTokens": 6780,
-      "peakDailyTokens": 3000,
+      "peakDailyTokens": 3680,
       "tokenBreakdown": {
-        "inputTokens": 1200,
-        "outputTokens": 580,
-        "cacheReadTokens": 4900,
-        "cacheWriteTokens": 100,
-        "reasoningTokens": null
+        "inputTokens": 3400,
+        "outputTokens": 700,
+        "cacheReadTokens": 450,
+        "cacheWriteTokens": null,
+        "reasoningTokens": 150
       }
     },
     "activity": {
@@ -50,10 +50,10 @@
         "status": "not_comparable",
         "reason": "remote_profile_source_differs"
       },
-      "longestTaskDurationMs": 1800000,
-      "fastModePercent": 50,
-      "reasoningEffort": "xhigh",
-      "reasoningEffortPercent": 80,
+      "longestTaskDurationMs": 240000,
+      "fastModePercent": null,
+      "reasoningEffort": "high",
+      "reasoningEffortPercent": 40,
       "totalThreads": 3
     },
     "models": {
@@ -62,22 +62,12 @@
       }
     },
     "skills": {
-      "exploredCount": 2,
-      "totalUsed": 4,
-      "topSkills": [
-        {
-          "id": "synthetic-skill",
-          "usageCount": 3
-        }
-      ]
+      "exploredCount": null,
+      "totalUsed": null,
+      "topSkills": []
     },
     "plugins": {
-      "topPlugins": [
-        {
-          "id": "synthetic-plugin",
-          "usageCount": 2
-        }
-      ]
+      "topPlugins": []
     }
   },
   "notes": [
