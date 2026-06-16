@@ -83,6 +83,17 @@ Task #5 Stage 1: asset source 계약과 fixture 설계
 
 ## Stage 2 — asset aggregate 구현
 
+### Stage 2 보정 사항
+
+Stage 1 이후 Codex Desktop 추출물과 실제 custom pet 생성 결과를 추가 분석한 결과, `pets/`는 임의 이미지 파일을 담는 폴더가 아니라 `pets/<id>/pet.json` manifest와 spritesheet 파일을 담는 custom pet 루트로 확인됐다. 또한 기본 pet catalog는 `<codex-home>/pets/`가 아니라 Codex Desktop 앱 번들에 내장되어 있고, 선택된 pet은 `selected-avatar-id` persisted atom을 통해 관리된다. 따라서 Stage 2 구현은 Stage 1의 `pets/*.png` 후보 계약을 폐기하고 아래 기준으로 보정한다.
+
+- built-in pet catalog는 allowlisted logical catalog로 다룬다.
+- `selected-avatar-id`가 없거나 읽을 수 없으면 Codex Desktop 동작과 같이 built-in `codex` pet으로 fallback한다.
+- `selected-avatar-id`가 built-in id이면 `codex-built-in:pet:{id}` assetRef를 반환한다.
+- `selected-avatar-id`가 `custom:<id>`이고 `pets/<id>/pet.json` + allowlisted spritesheet metadata가 있으면 `codex-local:pet:custom-selected` assetRef를 반환한다.
+- custom pet id, local directory name, manifest file name, spritesheet file name, raw path는 output과 diagnostics에 넣지 않는다.
+- `<codex-home>/generated_images/`는 계속 private generated artifact로 보고 custom/built-in pet source로 승격하지 않는다.
+
 ### 산출물
 
 신규:
@@ -101,13 +112,14 @@ Task #5 Stage 1: asset source 계약과 fixture 설계
 
 - `aggregateCodexAssetsFromCodexHome(options)`를 구현한다.
   - `resolveCodexHome(options)`를 사용한다.
-  - allowlisted local asset source만 검사한다.
-  - file content는 읽지 않고 directory entry/stat metadata와 extension만 사용한다.
-  - safe pet candidate가 있으면 `kind: "codex-asset"`, `url: null`, deterministic opaque `assetRef`, inferred `contentType`을 반환한다.
+  - allowlisted built-in pet catalog와 local custom pet manifest source만 검사한다.
+  - image file content는 읽지 않고 state/manifest JSON, directory entry/stat metadata, extension만 사용한다.
+  - selected built-in pet이 있거나 selected state가 없으면 `codex-built-in:pet:{id}` assetRef를 반환한다.
+  - selected custom pet candidate가 있으면 `kind: "codex-asset"`, `url: null`, deterministic opaque `assetRef`, inferred `contentType`을 반환한다.
   - avatar는 Stage 1에서 safe local source가 확인된 경우에만 반환한다. 확인되지 않으면 `null` 또는 omitted output + diagnostics로 둔다.
 - deterministic candidate selection을 구현한다.
   - stable sort 기준을 고정한다.
-  - `assetRef`는 `codex-local:{asset-kind}:primary` 같은 logical reference로 두고, raw path, file name, file-name hash를 출력하지 않는다.
+  - `assetRef`는 `codex-built-in:pet:{id}` 또는 `codex-local:pet:custom-selected` 같은 logical reference로 두고, raw path, custom id, file name, file-name hash를 출력하지 않는다.
 - diagnostics를 구현한다.
   - `status`, `reason`, `source`, `avatar`, `pet`
   - scanned candidate count

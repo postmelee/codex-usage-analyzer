@@ -1,15 +1,17 @@
 # Empty asset parser fixture
 
-This fixture is synthetic data for Task #5 unavailable asset tests.
+This fixture is synthetic data for Task #5 default built-in pet tests.
 
-It models a Codex home where no allowlisted avatar or pet asset source is
-available. The production analyzer must not fall back to sample fixture values
-or wrapper-owned remote profile URLs.
+It models a Codex home where no custom pet or selected pet state is available.
+Codex Desktop falls back to the built-in `codex` pet when no selected avatar id
+is persisted. The production analyzer must not fall back to sample fixture
+values or wrapper-owned remote profile URLs.
 
 Expected contract:
 
-- `codexAssets` remains omitted or unavailable when no safe local source exists.
-- Diagnostics explain that avatar and pet sources were not found or are not
-  owned by the analyzer.
+- `codexAssets.pet` may contain a safe built-in logical reference for the
+  default `codex` pet.
+- Diagnostics explain that avatar source is not owned by the analyzer and that
+  pet selection used the default built-in fallback.
 - No local path, data URL, credential, account identifier, or image content is
   emitted.
