@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "source": "manual-profile-ui",
+  "capturedProfileAt": "2026-06-16T00:00:00.000Z",
+  "profileDateBasis": "codex_desktop_remote_profile",
+  "tolerances": {
+    "usage.totalTokens": {
+      "absolute": 100
+    },
+    "usage.peakDailyTokens": {
+      "absolute": 100
+    },
+    "usage.tokenBreakdown.inputTokens": {
+      "absolute": 50
+    },
+    "usage.tokenBreakdown.outputTokens": {
+      "absolute": 50
+    },
+    "usage.tokenBreakdown.cacheReadTokens": {
+      "absolute": 50
+    },
+    "usage.tokenBreakdown.cacheWriteTokens": {
+      "absolute": 50
+    },
+    "activity.fastModePercent": {
+      "absolute": 1
+    },
+    "activity.reasoningEffortPercent": {
+      "absolute": 1
+    }
+  },
+  "expected": {
+    "usage": {
+      "totalTokens": 6780,
+      "peakDailyTokens": 3000,
+      "tokenBreakdown": {
+        "inputTokens": 1200,
+        "outputTokens": 580,
+        "cacheReadTokens": 4900,
+        "cacheWriteTokens": 100,
+        "reasoningTokens": null
+      }
+    },
+    "activity": {
+      "currentStreakDays": {
+        "status": "not_comparable",
+        "reason": "remote_profile_source_differs"
+      },
+      "longestStreakDays": {
+        "status": "not_comparable",
+        "reason": "remote_profile_source_differs"
+      },
+      "longestTaskDurationMs": 1800000,
+      "fastModePercent": 50,
+      "reasoningEffort": "xhigh",
+      "reasoningEffortPercent": 80,
+      "totalThreads": 3
+    },
+    "models": {
+      "favoriteModel": {
+        "model": "gpt-5-codex"
+      }
+    },
+    "skills": {
+      "exploredCount": 2,
+      "totalUsed": 4,
+      "topSkills": [
+        {
+          "id": "synthetic-skill",
+          "usageCount": 3
+        }
+      ]
+    },
+    "plugins": {
+      "topPlugins": [
+        {
+          "id": "synthetic-plugin",
+          "usageCount": 2
+        }
+      ]
+    }
+  },
+  "notes": [
+    "Synthetic fixture values only.",
+    "Use a separate uncommitted local baseline for real profile checks."
+  ]
+}
