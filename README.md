@@ -52,6 +52,56 @@ node bin/codex-usage-analyzer.js analyze --json --fixture-sample
 
 The `--fixture-sample` mode is for tests, examples, and contract inspection only. It returns the packaged sample snapshot and must not be treated as real local Codex usage.
 
+## Profile Parity Smoke
+
+Use the profile smoke helper when you want to compare a local analyzer result
+with values manually copied from Codex Desktop's profile UI. The comparison uses
+a redacted baseline file; do not commit a baseline copied from a real account.
+
+Create a production snapshot:
+
+```bash
+node bin/codex-usage-analyzer.js analyze --json > <local-snapshot.json>
+```
+
+Create a redacted baseline using
+`src/__tests__/fixtures/profile-baseline/redacted-baseline.json` as the shape
+reference, then compare:
+
+```bash
+node scripts/profile-smoke.js --baseline <redacted-baseline.json> --snapshot <local-snapshot.json>
+```
+
+The smoke output is a field-level summary. Result statuses mean:
+
+- `match`: expected and actual values are equal.
+- `within_tolerance`: numeric values differ only within the baseline tolerance.
+- `mismatch`: the field is comparable and differs outside tolerance.
+- `not_comparable`: the baseline intentionally marks the field as visible in
+  profile UI but not comparable to local analyzer data.
+- `skipped`: the baseline did not include that expected field.
+
+Known mismatch reasons:
+
+- Codex Desktop profile values can come from a remote account-level source,
+  while this analyzer reads local session files and local Codex metadata.
+- Local cleanup, migration, archiving, deletion, or another device can make the
+  profile UI and local analyzer cover different source ranges.
+- Streaks use the analyzer's UTC date buckets from local token events; profile
+  UI can use remote activity data.
+- Top skills/plugins require actual local invocation events. Catalog or enabled
+  tool lists alone are not counted.
+- `--fixture-sample` snapshots are rejected by the profile smoke helper, so a
+  packaged example cannot pass as a real profile parity check.
+
+Redaction rules for real local baselines:
+
+- Keep only profile-visible numbers, model ids, ranking ids, and explicit
+  tolerance values needed for comparison.
+- Do not include real account handles, emails, local private paths, credential
+  material, conversation identifiers, conversation titles, prompts, responses,
+  tool input/output bodies, image captures, or unredacted session JSONL.
+
 ## SDK
 
 ```js
@@ -125,7 +175,7 @@ The test suite validates the SDK exports, production parser behavior, asset safe
 This package does not:
 
 - perform GitHub OAuth
-- call internal Codex Desktop profile APIs
+- use private Codex Desktop profile endpoints
 - export custom pet image files by default
 - issue or store submit tokens
 - own public profile handles
