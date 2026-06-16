@@ -16,7 +16,7 @@ GitHub Issue: [#6](https://github.com/postmelee/codex-usage-analyzer/issues/6)
 
 | 경로 | 변경 요약 | 영향 범위 |
 |---|---|---|
-| `src/profile-baseline.js` | redacted baseline validation, tolerance comparison, `not_comparable`, sample fixture guard, safe summary formatter 추가 | 내부 QA 비교 로직 |
+| `src/profile-baseline.js` | redacted baseline validation, tolerance comparison, `not_comparable`, sample fixture guard, task-style plugin id 허용, safe summary formatter 추가 | 내부 QA 비교 로직 |
 | `scripts/profile-smoke.js` | redacted baseline과 production snapshot을 비교하는 로컬 smoke command 추가 | 개발/릴리즈 QA |
 | `src/__tests__/profile-baseline.test.js` | profile smoke 비교 동작과 script safety regression test 추가 | 테스트 |
 | `src/__tests__/fixtures/profile-baseline/README.md` | synthetic profile baseline fixture contract와 redaction rules 문서화 | 테스트 fixture 문서 |
@@ -48,7 +48,7 @@ GitHub Issue: [#6](https://github.com/postmelee/codex-usage-analyzer/issues/6)
 | profile baseline fixture | 없음 | synthetic redacted baseline 1개 |
 | profile smoke command | 없음 | `scripts/profile-smoke.js` |
 | profile baseline tests | 없음 | `src/__tests__/profile-baseline.test.js` |
-| 전체 테스트 수 | 29개 pass | 39개 pass |
+| 전체 테스트 수 | 29개 pass | 40개 pass |
 | parser fixture profile smoke | 없음 | total 19, matched 17, not comparable 2, mismatched 0 |
 
 ## 검증 결과
@@ -58,6 +58,7 @@ GitHub Issue: [#6](https://github.com/postmelee/codex-usage-analyzer/issues/6)
 | 개발자가 로컬에서 analyzer 결과와 profile baseline을 같은 checklist로 비교할 수 있다 | OK — `scripts/profile-smoke.js --baseline ... --snapshot ...` 추가 및 README 문서화 |
 | fixture와 실제 parser 값이 섞이는 회귀를 smoke test가 잡을 수 있다 | OK — sample fixture snapshot은 `sample_fixture_not_allowed`로 거부 |
 | baseline 파일에 계정 token, local absolute path, 민감 원본 데이터가 들어가지 않는다 | OK — synthetic fixture privacy scan 통과, validation에서 sensitive-looking key/string reject |
+| 정상 plugin id가 token-like 패턴으로 오탐되지 않는다 | OK — `task-start`, `task-register`, `pr-merge-cleanup` 허용 테스트 추가, 긴 `sk-...` secret-like 문자열은 reject 유지 |
 | total tokens, peak daily tokens, streaks, activity insights, top skills/plugins, token breakdown, favorite model 비교 대상 포함 | OK — `src/profile-baseline.js` comparison field set과 synthetic baseline에 포함 |
 | 허용 오차/날짜 기준 문서화 | OK — baseline `tolerances`, README known mismatch reason, profile comparison `not_comparable` 안내 |
 | `UsageSnapshot v2` schema 변경 없음 | OK — public schema와 SDK export 변경 없음 |
@@ -65,7 +66,7 @@ GitHub Issue: [#6](https://github.com/postmelee/codex-usage-analyzer/issues/6)
 ### 단계별 검증 결과
 
 - Stage 1: [`task_m010_6_stage1.md`](../working/task_m010_6_stage1.md) — baseline contract와 synthetic fixture 작성, privacy scan 통과.
-- Stage 2: [`task_m010_6_stage2.md`](../working/task_m010_6_stage2.md) — comparison module/script 구현, 39개 테스트 통과, parser fixture smoke 통과, sample fixture guard 통과.
+- Stage 2: [`task_m010_6_stage2.md`](../working/task_m010_6_stage2.md) — comparison module/script 구현, parser fixture smoke 통과, sample fixture guard 통과.
 - Stage 3: [`task_m010_6_stage3.md`](../working/task_m010_6_stage3.md) — README profile smoke 문서화, README privacy wording scan 통과.
 - Stage 4: [`task_m010_6_stage4.md`](../working/task_m010_6_stage4.md) — 실제 local analyzer snapshot 생성, schema valid, privacy scan 통과, final report 작성.
 

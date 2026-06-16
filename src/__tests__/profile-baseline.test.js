@@ -112,6 +112,36 @@ test("rejects sensitive-looking baseline values", () => {
   assert.equal(JSON.stringify(result).includes("/Users/example"), false);
 });
 
+test("allows task-style plugin ids while rejecting secret-looking token strings", () => {
+  const baseline = loadProfileBaseline(baselineFixturePath);
+  const adjustedBaseline = structuredClone(baseline);
+  adjustedBaseline.expected.plugins.topPlugins = [
+    {
+      id: "task-start",
+      usageCount: 10
+    },
+    {
+      id: "task-register",
+      usageCount: 5
+    },
+    {
+      id: "pr-merge-cleanup",
+      usageCount: 3
+    }
+  ];
+
+  assert.equal(validateProfileBaseline(adjustedBaseline).ok, true);
+
+  adjustedBaseline.expected.plugins.topPlugins[0].id = "sk-1234567890abcdef";
+
+  const validation = validateProfileBaseline(adjustedBaseline);
+  const result = compareProfileBaseline(createProductionLikeSnapshot(), adjustedBaseline);
+
+  assert.equal(validation.ok, false);
+  assert.equal(result.status, "invalid_baseline");
+  assert.equal(JSON.stringify(result).includes("sk-1234567890abcdef"), false);
+});
+
 test("rejects sample fixture snapshots for profile smoke", () => {
   const baseline = loadProfileBaseline(baselineFixturePath);
   const sampleSnapshot = createSampleUsageSnapshotV2();

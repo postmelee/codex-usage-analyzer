@@ -39,7 +39,7 @@ git diff --check
 
 결과:
 
-- OK: `npm test` 통과. 39개 테스트 모두 pass.
+- OK: `npm test` 통과. 40개 테스트 모두 pass.
 - OK: 실제 local analyzer snapshot 생성 성공.
 - OK: 실제 local analyzer snapshot은 `UsageSnapshot v2` schema valid, fixture extension 없음.
 - OK: 실제 local analyzer diagnostics summary
@@ -52,6 +52,9 @@ git diff --check
 - OK: 실제 local analyzer snapshot privacy scan 통과.
 - OK: parser fixture profile smoke 통과.
   - summary: total 19, matched 17, within tolerance 0, mismatched 0, not comparable 2, skipped 0.
+- OK: 실제 profile baseline 보정 확인.
+  - `task-start`, `task-register`, `pr-merge-cleanup` 같은 task-style plugin id가 baseline validator의 token-like pattern에 오탐되지 않음을 확인.
+  - 긴 `sk-...` secret-like 문자열은 계속 reject됨.
 - OK: `git diff --check` 통과.
 
 ## 잔여 위험

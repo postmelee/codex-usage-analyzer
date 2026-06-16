@@ -34,7 +34,7 @@ const RANKING_FIELD_PATHS = new Set([
 const SENSITIVE_KEY_PATTERN =
   /access[_-]?token|refresh[_-]?token|authorization|password|secret|session[_-]?id|thread[_-]?id|prompt|response|tool[_-]?input|tool[_-]?output|screenshot|image[_-]?path|local[_-]?path/i;
 const SENSITIVE_STRING_PATTERN =
-  /\/Users\/|\/home\/|\/private\/var\/|access_token|refresh_token|Bearer |sk-|github_pat_|npm_[A-Za-z0-9]|session[_-]?id|thread[_-]?id|data:image|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+  /\/Users\/|\/home\/|\/private\/var\/|access_token|refresh_token|Bearer |\bsk-[A-Za-z0-9][A-Za-z0-9_-]{8,}\b|github_pat_|npm_[A-Za-z0-9]|session[_-]?id|thread[_-]?id|data:image|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 export function loadProfileBaseline(filePath) {
   return readJsonFile(filePath, "baseline_file_read_failed", "baseline_json_invalid");
