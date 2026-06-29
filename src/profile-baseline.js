@@ -31,6 +31,28 @@ const RANKING_FIELD_PATHS = new Set([
   "plugins.topPlugins"
 ]);
 
+const COMPARISON_FIELD_PATHS = new Set(COMPARISON_FIELDS);
+
+const SOURCE_AWARE_REASONS = new Set([
+  "source_mismatch",
+  "profile_parity_not_guaranteed",
+  "remote_profile_source_differs"
+]);
+
+const SOURCE_SENSITIVE_FIELD_PATHS = new Set([
+  "activity.currentStreakDays",
+  "activity.longestStreakDays",
+  "activity.longestTaskDurationMs",
+  "activity.fastModePercent",
+  "activity.reasoningEffort",
+  "activity.reasoningEffortPercent",
+  "activity.totalThreads",
+  "skills.exploredCount",
+  "skills.totalUsed",
+  "skills.topSkills",
+  "plugins.topPlugins"
+]);
+
 const SENSITIVE_KEY_PATTERN =
   /access[_-]?token|refresh[_-]?token|authorization|password|secret|session[_-]?id|thread[_-]?id|prompt|response|tool[_-]?input|tool[_-]?output|screenshot|image[_-]?path|local[_-]?path/i;
 const SENSITIVE_STRING_PATTERN =
@@ -103,6 +125,23 @@ export function validateProfileBaseline(baseline) {
     }
   }
 
+  if (baseline.sourcePolicy !== undefined && !isPlainObject(baseline.sourcePolicy)) {
+    errors.push("sourcePolicy must be an object when provided");
+  } else if (isPlainObject(baseline.sourcePolicy)) {
+    for (const [fieldPath, reason] of Object.entries(baseline.sourcePolicy)) {
+      if (!COMPARISON_FIELD_PATHS.has(fieldPath)) {
+        errors.push(`sourcePolicy.${fieldPath} must target a comparison field`);
+      }
+
+      if (!SOURCE_AWARE_REASONS.has(reason)) {
+        errors.push(
+          `sourcePolicy.${fieldPath} must be source_mismatch, `
+            + "profile_parity_not_guaranteed, or remote_profile_source_differs"
+        );
+      }
+    }
+  }
+
   collectSensitiveValues(baseline, "baseline", errors);
 
   return {
@@ -131,9 +170,11 @@ export function compareProfileBaseline(snapshot, baseline) {
   }
 
   const results = [];
+  const sourcePolicy = isPlainObject(baseline.sourcePolicy) ? baseline.sourcePolicy : {};
 
   for (const fieldPath of COMPARISON_FIELDS) {
     const expected = getValueAtPath(baseline.expected, fieldPath);
+    const sourcePolicyReason = getSourcePolicyReason(sourcePolicy, fieldPath);
 
     if (!expected.exists) {
       results.push(createComparisonResult(fieldPath, "skipped", "expected_field_absent"));
@@ -150,7 +191,7 @@ export function compareProfileBaseline(snapshot, baseline) {
     }
 
     if (RANKING_FIELD_PATHS.has(fieldPath)) {
-      results.push(...compareRankingField(snapshot, fieldPath, expected.value));
+      results.push(...compareRankingField(snapshot, fieldPath, expected.value, sourcePolicyReason));
       continue;
     }
 
@@ -161,7 +202,8 @@ export function compareProfileBaseline(snapshot, baseline) {
       actual: actual.value,
       actualExists: actual.exists,
       tolerance: baseline.tolerances?.[fieldPath],
-      snapshot
+      snapshot,
+      sourcePolicyReason
     }));
   }
 
@@ -221,7 +263,7 @@ function createTerminalResult(status, reason, errors) {
   };
 }
 
-function compareRankingField(snapshot, fieldPath, expectedValue) {
+function compareRankingField(snapshot, fieldPath, expectedValue, sourcePolicyReason) {
   const actual = getValueAtPath(snapshot, fieldPath);
 
   if (!Array.isArray(expectedValue)) {
@@ -235,17 +277,23 @@ function compareRankingField(snapshot, fieldPath, expectedValue) {
 
   if (!actual.exists || !Array.isArray(actual.value)) {
     return [
-      createComparisonResult(fieldPath, "mismatch", "actual_ranking_unavailable", {
-        expected: toSafeValue(expectedValue),
-        actual: toSafeValue(actual.value)
-      })
+      createComparisonResult(
+        fieldPath,
+        "mismatch",
+        sourcePolicyReason ?? "actual_ranking_unavailable",
+        {
+          expected: toSafeValue(expectedValue),
+          actual: toSafeValue(actual.value)
+        }
+      )
     ];
   }
 
   if (expectedValue.length === 0) {
+    const isMatch = actual.value.length === 0;
     return [
-      createComparisonResult(fieldPath, actual.value.length === 0 ? "match" : "mismatch", (
-        actual.value.length === 0 ? "empty_ranking_matches" : "actual_ranking_not_empty"
+      createComparisonResult(fieldPath, isMatch ? "match" : "mismatch", (
+        isMatch ? "empty_ranking_matches" : sourcePolicyReason ?? "actual_ranking_not_empty"
       ), {
         expected: 0,
         actual: actual.value.length
@@ -271,7 +319,7 @@ function compareRankingField(snapshot, fieldPath, expectedValue) {
       results.push(createComparisonResult(
         `${fieldPath}[${index}]`,
         "mismatch",
-        "actual_ranking_item_missing",
+        sourcePolicyReason ?? "actual_ranking_item_missing",
         {
           expected: toSafeValue(expectedItem),
           actual: null
@@ -291,7 +339,8 @@ function compareRankingField(snapshot, fieldPath, expectedValue) {
         actual: actualItem[key],
         actualExists: Object.hasOwn(actualItem, key),
         tolerance: null,
-        snapshot
+        snapshot,
+        sourcePolicyReason
       }));
     }
   });
@@ -305,13 +354,19 @@ function compareScalarField({
   actual,
   actualExists,
   tolerance,
-  snapshot
+  snapshot,
+  sourcePolicyReason
 }) {
   if (!actualExists) {
-    return createComparisonResult(fieldPath, "mismatch", "actual_field_absent", {
-      expected: toSafeValue(expected),
-      actual: null
-    });
+    return createComparisonResult(
+      fieldPath,
+      "mismatch",
+      getMismatchReason(fieldPath, snapshot, sourcePolicyReason, "actual_field_absent"),
+      {
+        expected: toSafeValue(expected),
+        actual: null
+      }
+    );
   }
 
   if (typeof expected === "number" && typeof actual === "number") {
@@ -331,10 +386,15 @@ function compareScalarField({
       });
     }
 
-    return createComparisonResult(fieldPath, "mismatch", "numeric_mismatch", {
-      expected,
-      actual
-    });
+    return createComparisonResult(
+      fieldPath,
+      "mismatch",
+      getMismatchReason(fieldPath, snapshot, sourcePolicyReason, "numeric_mismatch"),
+      {
+        expected,
+        actual
+      }
+    );
   }
 
   if (Object.is(expected, actual)) {
@@ -344,22 +404,31 @@ function compareScalarField({
     });
   }
 
-  return createComparisonResult(fieldPath, "mismatch", getMismatchReason(fieldPath, snapshot), {
-    expected: toSafeValue(expected),
-    actual: toSafeValue(actual)
-  });
+  return createComparisonResult(
+    fieldPath,
+    "mismatch",
+    getMismatchReason(fieldPath, snapshot, sourcePolicyReason, "value_mismatch"),
+    {
+      expected: toSafeValue(expected),
+      actual: toSafeValue(actual)
+    }
+  );
 }
 
-function getMismatchReason(fieldPath, snapshot) {
+function getMismatchReason(fieldPath, snapshot, sourcePolicyReason, fallbackReason) {
+  if (sourcePolicyReason !== null && sourcePolicyReason !== undefined) {
+    return sourcePolicyReason;
+  }
+
   if (
-    fieldPath.startsWith("activity.")
+    isSourceSensitiveField(fieldPath)
     && snapshot.extensions?.["codexUsageAnalyzer.diagnostics"]?.profileComparison?.parity
       === "not_guaranteed"
   ) {
     return "profile_parity_not_guaranteed";
   }
 
-  return "value_mismatch";
+  return fallbackReason;
 }
 
 function isWithinTolerance(expected, actual, tolerance) {
@@ -436,6 +505,25 @@ function getAggregateReason(status) {
 
 function isNotComparableMarker(value) {
   return isPlainObject(value) && value.status === "not_comparable";
+}
+
+function getSourcePolicyReason(sourcePolicy, fieldPath) {
+  const reason = sourcePolicy[fieldPath];
+  return SOURCE_AWARE_REASONS.has(reason) ? reason : null;
+}
+
+function isSourceSensitiveField(fieldPath) {
+  for (const sourceSensitiveFieldPath of SOURCE_SENSITIVE_FIELD_PATHS) {
+    if (
+      fieldPath === sourceSensitiveFieldPath
+      || fieldPath.startsWith(`${sourceSensitiveFieldPath}[`)
+      || fieldPath.startsWith(`${sourceSensitiveFieldPath}.`)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getValueAtPath(value, fieldPath) {
