@@ -13,7 +13,7 @@
   },
   "types": "./src/index.d.ts",
   "bin": {
-    "codex-usage-analyzer": "./bin/codex-usage-analyzer.js"
+    "codex-usage-analyzer": "bin/codex-usage-analyzer.js"
   },
   "exports": {
     ".": {

@@ -252,4 +252,4 @@ This package does not:
 
 ## Status
 
-This repository is the standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture, and the release checklist above is the maintainer path for npm publishing and npx verification. Broader parity work against Codex Desktop profile data remains outside the npm release flow.
+This repository is the standalone home for the analyzer package. Version `0.1.0` is published to npm and verified with `npx codex-usage-analyzer@latest analyze --json`. The production analyzer path is separated from the packaged sample fixture, and the release checklist above is the maintainer path for future npm publishing and npx verification. Broader parity work against Codex Desktop profile data remains outside the npm release flow.
