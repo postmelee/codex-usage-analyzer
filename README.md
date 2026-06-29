@@ -81,6 +81,36 @@ The smoke output is a field-level summary. Result statuses mean:
   profile UI but not comparable to local analyzer data.
 - `skipped`: the baseline did not include that expected field.
 
+Mismatch reasons distinguish parser-bug candidates from expected source
+differences:
+
+- `numeric_mismatch`, `value_mismatch`, `actual_field_absent`, and ranking
+  shape reasons mean a comparable field differed.
+- `source_mismatch` means the baseline author marked that field as comparing
+  different sources, such as remote profile data versus local analyzer data.
+- `profile_parity_not_guaranteed` means the local snapshot itself reports that
+  remote profile parity is not guaranteed, and the field is source-sensitive.
+- `remote_profile_source_differs` is used with `not_comparable` fields that
+  should be visible in the profile baseline but intentionally not compared.
+
+Use optional baseline `sourcePolicy` metadata to keep a field comparable while
+labeling source-driven differences:
+
+```json
+{
+  "sourcePolicy": {
+    "activity.totalThreads": "source_mismatch",
+    "skills.topSkills": "source_mismatch",
+    "plugins.topPlugins": "source_mismatch"
+  }
+}
+```
+
+`sourcePolicy` belongs only to the redacted smoke baseline. It is not part of
+`UsageSnapshot v2`, and the analyzer output schema does not change. A
+source-aware mismatch still makes the smoke command exit nonzero; the field
+reason is what separates source differences from likely parser regressions.
+
 Known mismatch reasons:
 
 - Codex Desktop profile values can come from a remote account-level source,
@@ -89,8 +119,10 @@ Known mismatch reasons:
   profile UI and local analyzer cover different source ranges.
 - Streaks use the analyzer's UTC date buckets from local token events; profile
   UI can use remote activity data.
-- Top skills/plugins require actual local invocation events. Catalog or enabled
-  tool lists alone are not counted.
+- Activity insights and thread counts can differ when the profile UI aggregates
+  remote account-level data and the analyzer reads retained local sessions.
+- Top skills/plugins require actual local invocation events. Catalog, enabled
+  tool lists, or remote profile rankings alone are not counted.
 - `--fixture-sample` snapshots are rejected by the profile smoke helper, so a
   packaged example cannot pass as a real profile parity check.
 

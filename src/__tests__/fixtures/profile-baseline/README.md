@@ -16,6 +16,7 @@ The fixture uses:
 - `capturedProfileAt`
 - `profileDateBasis`
 - `tolerances`
+- `sourcePolicy`
 - `expected`
 - `notes`
 
@@ -31,6 +32,32 @@ to come from a different source can use:
 ```json
 { "status": "not_comparable", "reason": "remote_profile_source_differs" }
 ```
+
+When a field should still be compared but the expected difference is likely
+caused by remote/local source differences, use top-level `sourcePolicy`:
+
+```json
+{
+  "sourcePolicy": {
+    "activity.totalThreads": "source_mismatch",
+    "skills.topSkills": "source_mismatch",
+    "plugins.topPlugins": "source_mismatch"
+  }
+}
+```
+
+`sourcePolicy` values are limited to:
+
+- `source_mismatch`
+- `profile_parity_not_guaranteed`
+- `remote_profile_source_differs`
+
+Use `not_comparable` when the field should not be compared at all. Use
+`sourcePolicy` when the field should remain comparable, but the result reason
+should show that remote profile source and local session source differ.
+
+This metadata belongs to the redacted baseline only. It is not part of
+`UsageSnapshot v2` and does not change analyzer output.
 
 ## Redaction Rules
 
