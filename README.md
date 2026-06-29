@@ -6,6 +6,8 @@ The package is designed to be reused by product-specific CLIs and web services. 
 
 ## CLI
 
+The published CLI entry point is:
+
 ```bash
 npx codex-usage-analyzer@latest analyze --json
 ```
@@ -52,11 +54,15 @@ node bin/codex-usage-analyzer.js analyze --json --fixture-sample
 
 The `--fixture-sample` mode is for tests, examples, and contract inspection only. It returns the packaged sample snapshot and must not be treated as real local Codex usage.
 
-## Profile Parity Smoke
+## Profile Parity Smoke (Repository Only)
 
-Use the profile smoke helper when you want to compare a local analyzer result
-with values manually copied from Codex Desktop's profile UI. The comparison uses
-a redacted baseline file; do not commit a baseline copied from a real account.
+Use the profile smoke helper from a repository checkout when you want to compare
+a local analyzer result with values manually copied from Codex Desktop's profile
+UI. The comparison uses a redacted baseline file; do not commit a baseline copied
+from a real account.
+
+The helper is not published as an npm package binary. It is a maintainer QA
+tool for release and parser parity checks.
 
 Create a production snapshot:
 
@@ -170,6 +176,13 @@ Public exports:
 - `USAGE_SNAPSHOT_V2_SCHEMA_VERSION`
 - `sampleUsageSnapshotV2`
 
+## Package Contents
+
+The npm package includes the CLI entry point, runtime analyzer source, parser
+modules, snapshot validators, type declarations, and the sample snapshot fixture
+used by the SDK. It excludes repository tests, parser fixtures, working docs,
+and repository-only smoke helper scripts.
+
 ## Ownership Boundary
 
 The analyzer owns local usage fields such as token totals, token breakdown, model usage, skill usage, plugin usage, activity statistics, and safe Codex pet logical references.
@@ -202,6 +215,27 @@ node bin/codex-usage-analyzer.js analyze --json --fixture-sample
 
 The test suite validates the SDK exports, production parser behavior, asset safe output behavior, fixture-only CLI behavior, and `UsageSnapshot v2` schema rules.
 
+## Release Checklist
+
+Before publishing:
+
+```bash
+npm test
+npm pack --dry-run
+node bin/codex-usage-analyzer.js analyze --json
+npx --yes github:postmelee/codex-usage-analyzer analyze --json
+```
+
+After the package is published:
+
+```bash
+npx --yes codex-usage-analyzer@latest analyze --json
+```
+
+Do not paste raw production snapshot output into release notes, PR bodies, or
+issue comments. Record only structural pass/fail results, exit codes, and
+package metadata needed for release verification.
+
 ## Non-Goals
 
 This package does not:
@@ -218,4 +252,4 @@ This package does not:
 
 ## Status
 
-This repository starts as a standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture. npm publishing, release automation, and broader parity work against Codex Desktop profile data are follow-up work.
+This repository is the standalone home for the analyzer package. The production analyzer path is separated from the packaged sample fixture, and the release checklist above is the maintainer path for npm publishing and npx verification. Broader parity work against Codex Desktop profile data remains outside the npm release flow.

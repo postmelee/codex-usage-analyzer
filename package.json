@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Analyze local Codex usage and emit UsageSnapshot v2 JSON.",
   "type": "module",
+  "homepage": "https://github.com/postmelee/codex-usage-analyzer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/postmelee/codex-usage-analyzer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/postmelee/codex-usage-analyzer/issues"
+  },
   "types": "./src/index.d.ts",
   "bin": {
     "codex-usage-analyzer": "./bin/codex-usage-analyzer.js"
@@ -15,7 +23,13 @@
   },
   "files": [
     "bin",
-    "src",
+    "src/analyze.js",
+    "src/cli.js",
+    "src/fixtures/sample-v2-snapshot.js",
+    "src/index.d.ts",
+    "src/index.js",
+    "src/parser",
+    "src/snapshot",
     "README.md"
   ],
   "scripts": {
