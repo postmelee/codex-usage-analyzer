@@ -227,13 +227,42 @@ The test suite validates the SDK exports, production parser behavior, asset safe
 
 ## Release Checklist
 
-Before publishing from a local checkout:
+Use this order for every npm release after `0.1.0`. npm does not allow
+reusing a published package name and version, so every follow-up publish must
+choose a new `package.json` version first.
+
+Choose the version bump before opening a release prep PR:
+
+- Patch: backwards-compatible bug fixes, documentation corrections, package
+  metadata corrections, or release process corrections.
+- Minor: backwards-compatible CLI, API, or analyzer capability additions.
+- Major: breaking CLI, API, package, or `UsageSnapshot v2` behavior changes.
+
+Treat `UsageSnapshot v2` contract changes as a separate issue with consumer
+impact analysis before choosing the release version.
+
+In the release prep PR, update only the package version and related release
+notes. Do not create a git tag, GitHub Release, or npm publish from the release
+prep PR.
 
 ```bash
+npm version --no-git-tag-version <patch|minor|major>
 npm test
 npm pack --dry-run
 node bin/codex-usage-analyzer.js analyze --json
 npx --yes github:postmelee/codex-usage-analyzer analyze --json
+```
+
+Review `package.json` and the `npm pack --dry-run` file list before merging.
+The version bump PR must be merged to `main` before publishing.
+
+After the version bump PR is merged, tag the `main` merge commit:
+
+```bash
+git checkout main
+git pull --ff-only
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 Trusted publishing setup for maintainers:
@@ -242,21 +271,45 @@ Trusted publishing setup for maintainers:
 - Use workflow filename `publish.yml` and allowed action `npm publish`.
 - Do not add npm token secrets to the publish workflow; it uses GitHub Actions
   OIDC with `id-token: write`.
-- Do not run the publish workflow until the version bump and release ordering
-  have been completed for the release.
+- Do not pass `--provenance`; trusted publishing generates provenance
+  automatically.
+- Do not run the publish workflow until the version bump PR has been merged and
+  the matching `vX.Y.Z` tag has been pushed.
 
-The publish workflow is manual-only:
+Confirm the registry state before running the manual-only publish workflow:
+
+```bash
+npm view codex-usage-analyzer version dist-tags --json
+```
+
+Then publish from GitHub Actions:
 
 ```text
 GitHub Actions -> Publish Package -> Run workflow
 ```
 
-After the package is published:
+After the package is published, verify the registry version and smoke the
+published CLI:
 
 ```bash
+npm view codex-usage-analyzer version dist-tags --json
 npx --yes codex-usage-analyzer@latest analyze --json
+```
+
+Verify registry signatures in a throwaway verification project:
+
+```bash
+VERIFY_DIR="$(mktemp -d)"
+cd "$VERIFY_DIR"
+npm init -y
+npm install codex-usage-analyzer@latest
 npm audit signatures
 ```
+
+Create the GitHub Release only after npm publish, `npx @latest` smoke, and
+signature verification have passed. Use the pushed `vX.Y.Z` tag and record the
+new npm version, structural smoke result, signature verification result, and any
+known limitations.
 
 Do not paste raw production snapshot output into release notes, PR bodies, or
 issue comments. Record only structural pass/fail results, exit codes, and
