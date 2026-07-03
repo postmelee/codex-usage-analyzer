@@ -1,0 +1,68 @@
+name: Publish Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify trusted publishing runtime
+        run: |
+          node --version
+          npm --version
+          node - <<'NODE'
+          const { execFileSync } = require("node:child_process");
+
+          function atLeast(actual, expected) {
+            const left = actual.split(".").map(Number);
+            const right = expected.split(".").map(Number);
+            for (let index = 0; index < right.length; index += 1) {
+              const leftValue = left[index] ?? 0;
+              const rightValue = right[index] ?? 0;
+              if (leftValue > rightValue) return true;
+              if (leftValue < rightValue) return false;
+            }
+            return true;
+          }
+
+          const npmVersion = execFileSync("npm", ["--version"], {
+            encoding: "utf8"
+          }).trim();
+
+          if (!atLeast(process.versions.node, "22.14.0")) {
+            throw new Error(`Node ${process.versions.node} does not satisfy trusted publishing`);
+          }
+
+          if (!atLeast(npmVersion, "11.5.1")) {
+            throw new Error(`npm ${npmVersion} does not satisfy trusted publishing`);
+          }
+          NODE
+
+      - name: Test
+        run: npm test
+
+      - name: Package dry run
+        run: npm pack --dry-run
+
+      - name: Publish
+        run: npm publish
