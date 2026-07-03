@@ -206,7 +206,7 @@ npm test
 npm run release:preflight
 npm_config_cache=/private/tmp/codex-usage-analyzer-npm-cache npm pack --dry-run
 rg -n "release:preflight|--release-ready|Publish Package|npm audit signatures" README.md
-rg -n "/Users/melee|BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9]|_authToken\\s*=|NPM_TOKEN\\s*=|NODE_AUTH_TOKEN\\s*=" README.md scripts/release-preflight.js mydocs/plans/task_m010_27.md mydocs/plans/task_m010_27_impl.md mydocs/working/task_m010_27_stage1.md mydocs/working/task_m010_27_stage2.md
+rg -n "/Users/[A-Za-z0-9._-]+|BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9]|_authToken\\s*=|NPM_TOKEN\\s*=|NODE_AUTH_TOKEN\\s*=" README.md scripts/release-preflight.js mydocs/plans/task_m010_27.md mydocs/plans/task_m010_27_impl.md mydocs/working/task_m010_27_stage1.md mydocs/working/task_m010_27_stage2.md
 git diff --check
 ```
 
