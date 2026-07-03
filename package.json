@@ -34,7 +34,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "release:preflight": "node scripts/release-preflight.js"
   },
   "engines": {
     "node": ">=20"
