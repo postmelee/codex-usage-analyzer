@@ -2,6 +2,7 @@
   "name": "codex-usage-analyzer",
   "version": "0.1.0",
   "description": "Analyze local Codex usage and emit UsageSnapshot v2 JSON.",
+  "license": "MIT",
   "type": "module",
   "homepage": "https://github.com/postmelee/codex-usage-analyzer#readme",
   "repository": {

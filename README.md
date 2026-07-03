@@ -183,6 +183,16 @@ modules, snapshot validators, type declarations, and the sample snapshot fixture
 used by the SDK. It excludes repository tests, parser fixtures, working docs,
 and repository-only smoke helper scripts.
 
+## License
+
+The source code and associated documentation in this repository are available
+under the MIT License. See `LICENSE`.
+
+This license applies only to this repository's code and documentation. It does
+not grant rights to OpenAI, Codex, OpenAI services, user local data, Codex
+Desktop assets, model outputs, trademarks, or third-party content. This project
+is not affiliated with, endorsed by, or sponsored by OpenAI.
+
 ## Ownership Boundary
 
 The analyzer owns local usage fields such as token totals, token breakdown, model usage, skill usage, plugin usage, activity statistics, and safe Codex pet logical references.
