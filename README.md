@@ -227,7 +227,7 @@ The test suite validates the SDK exports, production parser behavior, asset safe
 
 ## Release Checklist
 
-Before publishing:
+Before publishing from a local checkout:
 
 ```bash
 npm test
@@ -236,10 +236,26 @@ node bin/codex-usage-analyzer.js analyze --json
 npx --yes github:postmelee/codex-usage-analyzer analyze --json
 ```
 
+Trusted publishing setup for maintainers:
+
+- Configure the npm package's Trusted Publisher setting for GitHub Actions.
+- Use workflow filename `publish.yml` and allowed action `npm publish`.
+- Do not add npm token secrets to the publish workflow; it uses GitHub Actions
+  OIDC with `id-token: write`.
+- Do not run the publish workflow until the version bump and release ordering
+  have been completed for the release.
+
+The publish workflow is manual-only:
+
+```text
+GitHub Actions -> Publish Package -> Run workflow
+```
+
 After the package is published:
 
 ```bash
 npx --yes codex-usage-analyzer@latest analyze --json
+npm audit signatures
 ```
 
 Do not paste raw production snapshot output into release notes, PR bodies, or
