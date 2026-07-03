@@ -251,10 +251,13 @@ npm test
 npm pack --dry-run
 node bin/codex-usage-analyzer.js analyze --json
 npx --yes github:postmelee/codex-usage-analyzer analyze --json
+npm run release:preflight
 ```
 
 Review `package.json` and the `npm pack --dry-run` file list before merging.
-The version bump PR must be merged to `main` before publishing.
+The version bump PR must be merged to `main` before publishing. The default
+preflight mode is advisory: it can warn about release-ready conditions that are
+expected before the PR is merged, such as a missing release tag.
 
 After the version bump PR is merged, tag the `main` merge commit:
 
@@ -263,6 +266,12 @@ git checkout main
 git pull --ff-only
 git tag vX.Y.Z
 git push origin vX.Y.Z
+```
+
+Run strict preflight before publishing:
+
+```bash
+npm run release:preflight -- --release-ready
 ```
 
 Trusted publishing setup for maintainers:
