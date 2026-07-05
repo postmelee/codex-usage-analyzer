@@ -9,6 +9,7 @@ GitHub Issue: [#30](https://github.com/postmelee/codex-usage-analyzer/issues/30)
 | Stage | 제목 | 주요 산출 | 검증 |
 |---|---|---|---|
 | 1 | remote source와 credential boundary 조사 | `mydocs/working/task_m010_30_stage1.md` | public/source scan, boundary matrix, 민감정보 pattern scan, `git diff --check` |
+| 1.1 | codex-extracted API/profile bundle 분석 | `mydocs/working/task_m010_30_stage1_1.md` | extracted bundle endpoint/bridge scan, 민감정보 pattern scan, `git diff --check` |
 | 2 | experimental command/probe 설계와 mock 검증 전략 | `mydocs/working/task_m010_30_stage2.md` | opt-in/no-persistence scan, 기본 analyzer 변경 없음 확인, mock strategy 검토, `git diff --check` |
 | 3 | parity/latency 검증 프로토콜과 최종 feasibility 판단 | `mydocs/working/task_m010_30_stage3.md`, `mydocs/report/task_m010_30_report.md`, `mydocs/orders/20260705.md` | feasibility decision scan, 민감정보 pattern scan, `npm test`, `git diff --check`, `git status --short` |
 
@@ -20,6 +21,7 @@ GitHub Issue: [#30](https://github.com/postmelee/codex-usage-analyzer/issues/30)
 |---|---|---|---|---|
 | `mydocs/plans/task_m010_30_impl.md` | `mydocs/plans/` | 구현계획서 신규 | OK | 단계별 조사 방법, 승인 gate, 산출물, 검증 명령을 고정한다. |
 | `mydocs/working/task_m010_30_stage1.md` | `mydocs/working/` | Stage 1 신규 | OK | endpoint 후보와 credential boundary를 정리한다. |
+| `mydocs/working/task_m010_30_stage1_1.md` | `mydocs/working/` | Stage 1.1 신규 | OK | 사용자 제공 Codex Desktop 추출 번들의 API/profile/usage 호출 구조를 정리한다. |
 | `mydocs/working/task_m010_30_stage2.md` | `mydocs/working/` | Stage 2 신규 | OK | opt-in command/probe 설계와 mock 검증 전략을 정리한다. |
 | `mydocs/working/task_m010_30_stage3.md` | `mydocs/working/` | Stage 3 신규 | OK | parity/latency 검증 프로토콜과 feasibility 결론을 기록한다. |
 | `mydocs/report/task_m010_30_report.md` | `mydocs/report/` | Stage 3 신규 | OK | 최종 feasibility 결론, 수용 기준, 후속 구현 여부를 보존한다. |
@@ -120,6 +122,40 @@ git diff --check
 Task #30 Stage 1: remote source와 credential boundary 조사
 ```
 
+## Stage 1.1 — codex-extracted API/profile bundle 분석
+
+### 산출물
+
+신규:
+
+- `mydocs/working/task_m010_30_stage1_1.md`
+
+수정:
+
+- `mydocs/plans/task_m010_30_impl.md`
+
+### 변경 내용
+
+- 작업지시자가 제공한 `{codex-extracted}` 추출 폴더를 read-only로 분석한다.
+- 실제 keychain, auth file, live remote endpoint, raw credential에는 접근하지 않는다.
+- webview HTML entry, profile/usage 관련 asset chunk, host-side fetch bridge chunk를 확인한다.
+- `/wham/profiles/me`와 `/wham/usage*` 계열 endpoint 후보, response mapping, query/cache 경계, 인증 header 주입 위치를 분류한다.
+- Stage 2 설계에 필요한 "직접 CLI 재사용 가능 여부"와 "Desktop host bridge 의존성"을 정리한다.
+
+### 검증
+
+```bash
+rg -n "codex-extracted|/wham/profiles/me|/wham/usage|fetch bridge|Authorization|no live endpoint|credential boundary" mydocs/working/task_m010_30_stage1_1.md
+rg -n -f /private/tmp/cua-task30-sensitive-patterns.txt mydocs/plans/task_m010_30*.md mydocs/working/task_m010_30_stage*.md
+git diff --check
+```
+
+### 커밋
+
+```text
+Task #30 [Stage 1.1]: codex-extracted api/profile 분석
+```
+
 ## Stage 2 — experimental command/probe 설계와 mock 검증 전략
 
 ### 산출물
@@ -137,6 +173,7 @@ Task #30 Stage 1: remote source와 credential boundary 조사
 - opt-in experimental command 후보를 설계한다.
   - 예: `analyze-remote-profile`, `profile-remote-probe`, 또는 `analyze --experimental-remote-profile`
 - 기본 `analyze` 경로와의 분리 원칙을 정리한다.
+- Stage 1.1에서 확인한 `/wham/profiles/me`와 `/wham/usage*` 계열 endpoint 후보를 Desktop host auth bridge 의존성 있는 non-default source로 취급한다.
 - command 후보별로 다음 항목을 비교한다.
   - discovery 가능성
   - 사용자 동의 명확성
@@ -244,7 +281,7 @@ Task #30 Stage 3 + 최종 보고서: remote profile feasibility 판단 정리
 ## 단계 의존성
 
 - Stage 1은 이 구현계획서 승인 후 진행한다.
-- Stage 2는 Stage 1에서 endpoint/auth boundary가 정리되고 Stage 2 진입 승인을 받은 뒤 진행한다.
+- Stage 2는 Stage 1과 Stage 1.1에서 endpoint/auth boundary가 정리되고 Stage 2 진입 승인을 받은 뒤 진행한다.
 - Stage 3은 Stage 2의 experimental command/probe 설계와 live probe 필요 여부가 승인된 뒤 진행한다.
 - 실제 credential/keychain 접근 또는 live remote profile 호출은 Stage 승인과 별도 승인 없이는 수행하지 않는다.
 
