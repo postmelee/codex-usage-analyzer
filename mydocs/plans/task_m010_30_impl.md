@@ -10,7 +10,7 @@ GitHub Issue: [#30](https://github.com/postmelee/codex-usage-analyzer/issues/30)
 |---|---|---|---|
 | 1 | remote source와 credential boundary 조사 | `mydocs/working/task_m010_30_stage1.md` | public/source scan, boundary matrix, 민감정보 pattern scan, `git diff --check` |
 | 1.1 | codex-extracted API/profile bundle 분석 | `mydocs/working/task_m010_30_stage1_1.md` | extracted bundle endpoint/bridge scan, 민감정보 pattern scan, `git diff --check` |
-| 2 | experimental command/probe 설계와 mock 검증 전략 | `mydocs/working/task_m010_30_stage2.md` | opt-in/no-persistence scan, 기본 analyzer 변경 없음 확인, mock strategy 검토, `git diff --check` |
+| 2 | experimental source 설계, mock 전략, 승인된 direct-call probe | `mydocs/working/task_m010_30_stage2.md` | consent/no-persistence scan, direct-call parity/latency 확인, 기본 analyzer 변경 없음 확인, mock strategy 검토, `git diff --check` |
 | 3 | parity/latency 검증 프로토콜과 최종 feasibility 판단 | `mydocs/working/task_m010_30_stage3.md`, `mydocs/report/task_m010_30_report.md`, `mydocs/orders/20260705.md` | feasibility decision scan, 민감정보 pattern scan, `npm test`, `git diff --check`, `git status --short` |
 
 ## 문서 위치 확인
@@ -22,7 +22,7 @@ GitHub Issue: [#30](https://github.com/postmelee/codex-usage-analyzer/issues/30)
 | `mydocs/plans/task_m010_30_impl.md` | `mydocs/plans/` | 구현계획서 신규 | OK | 단계별 조사 방법, 승인 gate, 산출물, 검증 명령을 고정한다. |
 | `mydocs/working/task_m010_30_stage1.md` | `mydocs/working/` | Stage 1 신규 | OK | endpoint 후보와 credential boundary를 정리한다. |
 | `mydocs/working/task_m010_30_stage1_1.md` | `mydocs/working/` | Stage 1.1 신규 | OK | 사용자 제공 Codex Desktop 추출 번들의 API/profile/usage 호출 구조를 정리한다. |
-| `mydocs/working/task_m010_30_stage2.md` | `mydocs/working/` | Stage 2 신규 | OK | opt-in command/probe 설계와 mock 검증 전략을 정리한다. |
+| `mydocs/working/task_m010_30_stage2.md` | `mydocs/working/` | Stage 2 신규 | OK | experimental source 설계, mock 전략, 승인된 direct-call 검증을 정리한다. |
 | `mydocs/working/task_m010_30_stage3.md` | `mydocs/working/` | Stage 3 신규 | OK | parity/latency 검증 프로토콜과 feasibility 결론을 기록한다. |
 | `mydocs/report/task_m010_30_report.md` | `mydocs/report/` | Stage 3 신규 | OK | 최종 feasibility 결론, 수용 기준, 후속 구현 여부를 보존한다. |
 | `README.md` | 해당 없음 | 변경 없음 | OK | command 채택 전 사용자-facing 문서는 작성하지 않는다. |
@@ -34,7 +34,9 @@ GitHub Issue: [#30](https://github.com/postmelee/codex-usage-analyzer/issues/30)
 - local analyzer는 기본적으로 local Codex session source만 읽는 안전한 analyzer로 유지한다.
 - remote profile endpoint는 `remote_only_or_internal` 성격이며, 기본 analyzer source가 아니다.
 - `tokscale`은 Codex local session parser와 별도 usage command를 분리한다. 후자는 credential을 사용해 ChatGPT backend usage/rate-limit API를 호출하므로 보안 경계가 다르다.
-- #30에서는 이 분리 원칙을 유지하면서 opt-in experimental command의 가능성과 검증 조건만 판단한다.
+- #30에서는 이 분리 원칙을 유지하면서 explicit-consent experimental source의 가능성과 검증 조건을 판단한다. surface는 별도 command 또는 SDK/source option이 될 수 있다.
+- 2026-07-10 승인된 live probe에서 Codex app-server의 internal auth status method와 `/wham/profiles/me`를 조합한 standalone direct call이 성공했다.
+- direct call은 기술적으로 가능하지만 public app-server schema와 stable remote API 계약에 포함되지 않으므로 기본 analyzer 채택 여부와는 별도 판단한다.
 
 ## Feasibility 판단 기준
 
@@ -42,9 +44,9 @@ Stage 3 최종 보고서는 다음 중 하나로 결론을 낸다.
 
 | 결론 | 의미 | 후속 |
 |---|---|---|
-| `adopt_experimental` | opt-in experimental command로 구현할 가치가 있고 guardrail이 충분히 정의됨 | 별도 구현 이슈 생성 또는 #30 후속 작업으로 분리 |
+| `adopt_experimental` | explicit-consent experimental remote source로 구현할 가치가 있고 guardrail이 충분히 정의됨 | 별도 구현 이슈 생성 또는 #30 후속 작업으로 분리 |
 | `defer_pending_evidence` | 가능성은 있지만 endpoint/auth/profile parity 근거가 부족함 | local analyzer 우선, 추가 evidence 수집 이슈 제안 |
-| `reject_for_default_analyzer` | 기본 analyzer에는 부적합하며 experimental command도 현재는 이득보다 리스크가 큼 | remote command 구현 보류, local-only 방향 유지 |
+| `reject_for_default_analyzer` | 기본 analyzer에는 부적합하며 experimental source와 별도로 default path 채택을 거절함 | default local-only 방향 유지 |
 
 결론은 profile parity 가능성만으로 결정하지 않는다. credential boundary, endpoint stability, opt-in UX, no-persistence guardrail, mockability, failure handling, latency 측정 가능성을 함께 본다.
 
@@ -62,6 +64,19 @@ Live probe가 필요하다고 판단되면 Stage 2 또는 Stage 3 진입 전에 
 - 로컬 파일, 토큰, account identifier, raw profile field를 저장소에 남기지 않는 검증 방법
 
 승인이 없으면 #30은 public source 조사, local code inspection, mock strategy, 비교 프로토콜만으로 최종 판단한다.
+
+### Live Probe 승인 기록
+
+2026-07-10 작업지시자가 opt-in command 구현이 아닌 standalone direct call 실행과 첨부 Codex profile 화면 대비 검증을 명시 승인했다. 승인 범위는 다음과 같이 제한했다.
+
+- `GET /wham/profiles/me` 단일 profile endpoint
+- Codex app-server가 제공하는 로그인 토큰을 process memory에서만 사용
+- auth file과 keychain 직접 접근 없음
+- timeout 적용, retry 없음
+- raw response, bearer token, account identifier, profile identity field 미저장·미출력
+- 첨부 화면과의 비교는 aggregate field parity와 latency category만 저장소 문서에 기록
+
+승인된 probe는 Stage 2 보고서 커밋 전에 수행했으며 runtime code나 npm package artifact에는 포함하지 않는다.
 
 ## Stage 1 — remote source와 credential boundary 조사
 
@@ -156,7 +171,7 @@ git diff --check
 Task #30 [Stage 1.1]: codex-extracted api/profile 분석
 ```
 
-## Stage 2 — experimental command/probe 설계와 mock 검증 전략
+## Stage 2 — experimental source 설계, mock 검증 전략, 승인된 direct-call probe
 
 ### 산출물
 
@@ -166,7 +181,7 @@ Task #30 [Stage 1.1]: codex-extracted api/profile 분석
 
 수정:
 
-- 없음
+- `mydocs/plans/task_m010_30_impl.md`
 
 ### 변경 내용
 
@@ -193,11 +208,18 @@ Task #30 [Stage 1.1]: codex-extracted api/profile 분석
   - missing/not comparable reason
   - source mismatch reason
 - live probe가 필요한지 여부와 별도 승인 요청 내용을 Stage 2 보고서에 명시한다.
+- 별도 승인 후 Codex app-server auth context를 이용한 standalone direct call을 수행한다.
+  - endpoint는 `/wham/profiles/me` 하나로 제한한다.
+  - raw response, token, account identifier, profile identity field는 저장하거나 출력하지 않는다.
+  - 첨부 화면의 aggregate display와 field-level parity만 확인한다.
+  - 동일 시점 local analyzer를 safe summary로 실행해 end-to-end latency와 coverage 방향만 비교한다.
+  - public app-server schema에 auth token method가 포함되는지 확인해 안정 계약 여부를 분리한다.
 
 ### 검증
 
 ```bash
 rg -n "opt-in|experimental|no persistence|mock|failure|schema drift|timeout|rate limit" mydocs/working/task_m010_30_stage2.md
+rg -n "direct call|getAuthStatus|parity|latency|local analyzer|public schema" mydocs/working/task_m010_30_stage2.md
 git diff --name-only | rg -n "^(src/|README.md|package.json|bin/)" || true
 rg -n -f /private/tmp/cua-task30-sensitive-patterns.txt mydocs/plans/task_m010_30*.md mydocs/working/task_m010_30_stage*.md
 git diff --check
@@ -208,7 +230,7 @@ git diff --check
 ### 커밋
 
 ```text
-Task #30 Stage 2: experimental probe 설계와 mock 전략 정리
+Task #30 Stage 2: direct profile probe와 mock 전략 정리
 ```
 
 ## Stage 3 — parity/latency 검증 프로토콜과 최종 feasibility 판단
