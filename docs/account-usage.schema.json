@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codex Account Usage Contract",
+  "description": "Identity-free account usage output produced by codex-usage-analyzer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "capturedAt",
+    "summary",
+    "dailyUsageBuckets"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": 1
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "summary": {
+      "$ref": "#/definitions/summary"
+    },
+    "dailyUsageBuckets": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dailyUsageBucket"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "nullableNonNegativeInteger": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lifetimeTokens",
+        "peakDailyTokens",
+        "longestRunningTurnSec",
+        "currentStreakDays",
+        "longestStreakDays"
+      ],
+      "properties": {
+        "lifetimeTokens": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "peakDailyTokens": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "longestRunningTurnSec": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "currentStreakDays": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        },
+        "longestStreakDays": {
+          "$ref": "#/definitions/nullableNonNegativeInteger"
+        }
+      }
+    },
+    "dailyUsageBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startDate",
+        "tokens"
+      ],
+      "properties": {
+        "startDate": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  }
+}
