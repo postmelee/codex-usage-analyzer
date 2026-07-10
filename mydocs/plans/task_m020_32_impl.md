@@ -135,7 +135,7 @@ Task #32 Stage 1: account usage contract와 app-server transport 구현
 npm test
 node bin/codex-usage-analyzer.js --help
 node bin/codex-usage-analyzer.js --version
-rg -n "UsageSnapshot v2|UsageSnapshotV2|analyzeUsage|fixture-sample|profile-baseline|session_jsonl" README.md package.json src scripts docs .github && exit 1 || true
+rg -n "UsageSnapshot v2|UsageSnapshotV2|analyzeUsage|fixture-sample|profile-baseline|session_jsonl" package.json src scripts && exit 1 || true
 npm pack --dry-run --json > /private/tmp/task32-stage2-pack.json
 node --input-type=module -e 'import fs from "node:fs"; const [pack] = JSON.parse(fs.readFileSync("/private/tmp/task32-stage2-pack.json", "utf8")); const paths = pack.files.map((file) => file.path); const forbidden = paths.filter((path) => /^(mydocs|src\\/(parser|snapshot|fixtures|__tests__))\\//u.test(path) || path.includes("profile-smoke")); if (forbidden.length) throw new Error(forbidden.join(",")); console.log(`${paths.length} packaged files`);'
 git diff --check
@@ -200,6 +200,7 @@ rg -n "Quick start|Supported metrics|Requirements|Privacy|Security|Troubleshooti
 rg -n "npm version|npm publish|git tag|Publish Package|npm audit signatures|GitHub Release" README.md && exit 1 || true
 rg -n "npm version|npm publish|git tag|Publish Package|npm audit signatures|GitHub Release" mydocs/manual/npm_release_guide.md
 rg -n "GitHub identity|submit token|render|cache|delete|identity-free|experimental" docs/downstream-integration.md
+rg -n "UsageSnapshot v2|UsageSnapshotV2|analyzeUsage|fixture-sample|profile-baseline|session_jsonl" README.md package.json src scripts docs .github && exit 1 || true
 node -e 'JSON.parse(require("node:fs").readFileSync("docs/account-usage.schema.json", "utf8"))'
 git diff --check
 ```
