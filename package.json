@@ -1,7 +1,14 @@
 {
   "name": "codex-usage-analyzer",
-  "version": "0.1.0",
-  "description": "Analyze local Codex usage and emit UsageSnapshot v2 JSON.",
+  "version": "0.2.0",
+  "description": "Read Codex account usage through the official app-server protocol.",
+  "keywords": [
+    "codex",
+    "openai",
+    "usage",
+    "cli",
+    "app-server"
+  ],
   "license": "MIT",
   "type": "module",
   "homepage": "https://github.com/postmelee/codex-usage-analyzer#readme",
@@ -24,14 +31,17 @@
   },
   "files": [
     "bin",
-    "src/analyze.js",
+    "docs",
+    "src/account-usage.js",
+    "src/app-server-client.js",
     "src/cli.js",
-    "src/fixtures/sample-v2-snapshot.js",
+    "src/errors.js",
+    "src/format-account-usage.js",
     "src/index.d.ts",
     "src/index.js",
-    "src/parser",
-    "src/snapshot",
-    "README.md"
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "test": "node --test",

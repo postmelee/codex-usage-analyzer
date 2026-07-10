@@ -3,142 +3,163 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import {
-  sampleUsageSnapshotV2,
-  validateUsageSnapshotV2
-} from "../index.js";
+import { runCli } from "../cli.js";
+import { CODEX_USAGE_ERROR_CODES, CodexUsageError } from "../errors.js";
 
 const binPath = fileURLToPath(new URL("../../bin/codex-usage-analyzer.js", import.meta.url));
-const assetFixtureCodexHome = fileURLToPath(new URL("./fixtures/assets", import.meta.url));
-const parserFixtureCodexHome = fileURLToPath(new URL("./fixtures/parser", import.meta.url));
-const missingParserFixtureCodexHome = fileURLToPath(new URL("./fixtures/parser-missing", import.meta.url));
+const usage = {
+  contractVersion: 1,
+  capturedAt: "2026-07-11T00:00:00.000Z",
+  summary: {
+    lifetimeTokens: 1_234_567,
+    peakDailyTokens: 45_678,
+    longestRunningTurnSec: 540,
+    currentStreakDays: 8,
+    longestStreakDays: 14
+  },
+  dailyUsageBuckets: [
+    { startDate: "2026-07-10", tokens: 12_345 }
+  ]
+};
 
-test("prints production UsageSnapshot v2 JSON for analyze --json", () => {
-  const result = spawnSync(process.execPath, [
-    binPath,
-    "analyze",
-    "--json",
-    "--codex-home",
-    missingParserFixtureCodexHome
-  ], {
-    encoding: "utf8"
+test("prints a human-readable account usage summary with no arguments", async () => {
+  const io = captureIo();
+  const exitCode = await runCli([], io, {
+    readAccountUsage: async () => usage
   });
 
-  assert.equal(result.status, 0);
-  assert.equal(result.stderr, "");
+  assert.equal(exitCode, 0);
+  assert.equal(io.stderr.value, "");
+  assert.match(io.stdout.value, /^Codex account usage\n/u);
+  assert.match(io.stdout.value, /Lifetime tokens\s+1\.23M/u);
+  assert.match(io.stdout.value, /Current streak\s+8 days/u);
+  assert.match(io.stdout.value, /Captured at 2026-07-11T00:00:00\.000Z/u);
+});
 
-  const snapshot = JSON.parse(result.stdout);
-  const validation = validateUsageSnapshotV2(snapshot);
+test("supports the explicit usage alias", async () => {
+  const io = captureIo();
+  const exitCode = await runCli(["usage"], io, {
+    readAccountUsage: async () => usage
+  });
 
-  assert.equal(validation.ok, true, validation.errors.join("\n"));
-  assert.equal(snapshot.usage.totalTokens, 0);
-  assert.equal(snapshot.codexProfile, undefined);
-  assert.equal(snapshot.codexAssets.pet.assetRef, "codex-built-in:pet:codex");
-  assert.equal(snapshot.extensions["codexUsageAnalyzer.fixture"], undefined);
+  assert.equal(exitCode, 0);
+  assert.match(io.stdout.value, /^Codex account usage\n/u);
+});
+
+test("prints the exact account usage contract as JSON", async () => {
+  const io = captureIo();
+  const exitCode = await runCli(["usage", "--json"], io, {
+    readAccountUsage: async () => usage
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(io.stderr.value, "");
+  assert.deepEqual(JSON.parse(io.stdout.value), usage);
+});
+
+test("prints help without starting app-server", async () => {
+  for (const argv of [["--help"], ["usage", "-h"]]) {
+    const io = captureIo();
+    let called = false;
+    const exitCode = await runCli(argv, io, {
+      readAccountUsage: async () => {
+        called = true;
+      }
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(called, false);
+    assert.match(io.stdout.value, /codex-usage-analyzer \[usage\] \[--json\]/u);
+    assert.equal(io.stderr.value, "");
+  }
+});
+
+test("prints version without starting app-server", async () => {
+  const io = captureIo();
+  let called = false;
+  const exitCode = await runCli(["--version"], io, {
+    readAccountUsage: async () => {
+      called = true;
+    }
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(called, false);
+  assert.equal(io.stdout.value, "0.2.0\n");
+  assert.equal(io.stderr.value, "");
+});
+
+test("rejects unknown commands and conflicting flags without app-server", async () => {
+  for (const argv of [["analyze"], ["--json", "--json"], ["usage", "--wat"]]) {
+    const io = captureIo();
+    let called = false;
+    const exitCode = await runCli(argv, io, {
+      readAccountUsage: async () => {
+        called = true;
+      }
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(called, false);
+    assert.equal(io.stdout.value, "");
+    assert.match(io.stderr.value, /^codex-usage-analyzer - Read/u);
+  }
+});
+
+test("prints safe known errors without upstream details", async () => {
+  const io = captureIo();
+  const error = new CodexUsageError(CODEX_USAGE_ERROR_CODES.APP_SERVER_RPC_ERROR);
+  error.upstreamDetail = "synthetic-sensitive-detail";
+  const exitCode = await runCli(["--json"], io, {
+    readAccountUsage: async () => {
+      throw error;
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(io.stdout.value, "");
+  assert.match(io.stderr.value, /\[APP_SERVER_RPC_ERROR\]/u);
+  assert.equal(io.stderr.value.includes("synthetic-sensitive-detail"), false);
+});
+
+test("redacts unexpected errors", async () => {
+  const io = captureIo();
+  const exitCode = await runCli([], io, {
+    readAccountUsage: async () => {
+      throw new Error("synthetic-sensitive-detail");
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(io.stdout.value, "");
   assert.equal(
-    snapshot.extensions["codexUsageAnalyzer.diagnostics"].reason,
-    "local_sources_partially_available"
+    io.stderr.value,
+    "codex-usage-analyzer: Unexpected failure. [UNEXPECTED_ERROR]\n"
   );
 });
 
-test("prints parsed production JSON for analyze --json --codex-home", () => {
-  const result = spawnSync(process.execPath, [
-    binPath,
-    "analyze",
-    "--json",
-    "--codex-home",
-    parserFixtureCodexHome
-  ], {
+test("the package bin resolves version without account access", () => {
+  const result = spawnSync(process.execPath, [binPath, "--version"], {
     encoding: "utf8"
   });
 
   assert.equal(result.status, 0);
+  assert.equal(result.stdout, "0.2.0\n");
   assert.equal(result.stderr, "");
-
-  const snapshot = JSON.parse(result.stdout);
-  const validation = validateUsageSnapshotV2(snapshot);
-
-  assert.equal(validation.ok, true, validation.errors.join("\n"));
-  assert.equal(snapshot.usage.totalTokens, 6780);
-  assert.equal(snapshot.models.favoriteModel.model, "gpt-5-codex");
-  assert.equal(snapshot.activity.longestStreakDays, 3);
-  assert.equal(snapshot.codexAssets.pet.assetRef, "codex-built-in:pet:codex");
-  assert.equal(snapshot.extensions["codexUsageAnalyzer.fixture"], undefined);
-  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].status, "partial");
-  assert.equal(result.stdout.includes(parserFixtureCodexHome), false);
-  assert.equal(result.stdout.includes("lineNumber"), false);
 });
 
-test("prints asset production JSON for analyze --json --codex-home", () => {
-  const result = spawnSync(process.execPath, [
-    binPath,
-    "analyze",
-    "--json",
-    "--codex-home",
-    assetFixtureCodexHome
-  ], {
-    encoding: "utf8"
-  });
+function captureIo() {
+  return {
+    stdout: createWriter(),
+    stderr: createWriter()
+  };
+}
 
-  assert.equal(result.status, 0);
-  assert.equal(result.stderr, "");
-
-  const snapshot = JSON.parse(result.stdout);
-  const validation = validateUsageSnapshotV2(snapshot);
-
-  assert.equal(validation.ok, true, validation.errors.join("\n"));
-  assert.equal(snapshot.codexAssets.pet.assetRef, "codex-local:pet:custom-selected");
-  assert.equal(snapshot.extensions["codexUsageAnalyzer.diagnostics"].codexAssets.pet.kind, "custom");
-  assert.equal(result.stdout.includes(assetFixtureCodexHome), false);
-  assert.equal(result.stdout.includes("synthetic"), false);
-});
-
-test("prints sample fixture JSON only for analyze --json --fixture-sample", () => {
-  const result = spawnSync(process.execPath, [binPath, "analyze", "--json", "--fixture-sample"], {
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 0);
-  assert.equal(result.stderr, "");
-
-  const snapshot = JSON.parse(result.stdout);
-  const validation = validateUsageSnapshotV2(snapshot);
-
-  assert.equal(validation.ok, true, validation.errors.join("\n"));
-  assert.equal(snapshot.usage.totalTokens, sampleUsageSnapshotV2.usage.totalTokens);
-  assert.deepEqual(snapshot.codexProfile, sampleUsageSnapshotV2.codexProfile);
-  assert.deepEqual(
-    snapshot.extensions["codexUsageAnalyzer.fixture"],
-    sampleUsageSnapshotV2.extensions["codexUsageAnalyzer.fixture"]
-  );
-});
-
-test("rejects analyze without --json", () => {
-  const result = spawnSync(process.execPath, [binPath, "analyze"], {
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, "");
-  assert.match(result.stderr, /codex-usage-analyzer analyze --json/);
-});
-
-test("rejects unknown analyze flags", () => {
-  const result = spawnSync(process.execPath, [binPath, "analyze", "--json", "--unknown"], {
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, "");
-  assert.match(result.stderr, /codex-usage-analyzer analyze --json --fixture-sample/);
-});
-
-test("rejects analyze with missing --codex-home value", () => {
-  const result = spawnSync(process.execPath, [binPath, "analyze", "--json", "--codex-home"], {
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, "");
-  assert.match(result.stderr, /--codex-home <path>/);
-});
+function createWriter() {
+  return {
+    value: "",
+    write(chunk) {
+      this.value += chunk;
+    }
+  };
+}
