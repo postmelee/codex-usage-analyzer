@@ -33,8 +33,9 @@ await runCheck("working tree state", () => checkWorkingTree(args.releaseReady));
 await runCheck("release tag state", () => checkReleaseTag(context, args.releaseReady));
 await runCheck("test suite", () => runNpmTest());
 await runCheck("package dry run", () => checkPackDryRun(context));
+await runCheck("CI workflow", () => checkCiWorkflow());
 await runCheck("publish workflow", () => checkPublishWorkflow());
-await runCheck("release checklist", () => checkReleaseChecklist());
+await runCheck("release guide", () => checkReleaseGuide());
 await runCheck("sensitive pattern scan", () => checkSensitivePatterns());
 
 printSummary();
@@ -176,6 +177,16 @@ function checkReleaseTag(context, releaseReady) {
     };
   }
 
+  const taggedCommit = runTextCommand("git", ["rev-list", "-n", "1", expectedTag]).trim();
+  const headCommit = runTextCommand("git", ["rev-parse", "HEAD"]).trim();
+
+  if (taggedCommit !== headCommit) {
+    return {
+      status: releaseReady ? "FAIL" : "WARN",
+      detail: `${expectedTag} does not point to HEAD`
+    };
+  }
+
   return { detail: `${expectedTag} tag is present` };
 }
 
@@ -211,13 +222,20 @@ function checkPackDryRun(context) {
   const requiredPaths = [
     "LICENSE",
     "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "package.json",
     "bin/codex-usage-analyzer.js",
-    "src/analyze.js",
+    "docs/account-usage-contract.md",
+    "docs/account-usage.schema.json",
+    "docs/downstream-integration.md",
+    "src/account-usage.js",
+    "src/app-server-client.js",
     "src/cli.js",
+    "src/errors.js",
+    "src/format-account-usage.js",
     "src/index.js",
-    "src/index.d.ts",
-    "src/snapshot/v2-schema.js"
+    "src/index.d.ts"
   ];
 
   for (const path of requiredPaths) {
@@ -233,6 +251,22 @@ function checkPackDryRun(context) {
 
   if (forbiddenPath) {
     throw new Error(`pack_forbidden_${forbiddenPath.path.replaceAll("/", "_")}`);
+  }
+
+  const removedRuntimePaths = [
+    "src/analyze.js",
+    "src/parser/",
+    "src/snapshot/",
+    "src/fixtures/"
+  ];
+  const removedRuntimePath = packageInfo.files.find((file) =>
+    removedRuntimePaths.some((path) =>
+      path.endsWith("/") ? file.path.startsWith(path) : file.path === path
+    )
+  );
+
+  if (removedRuntimePath) {
+    throw new Error(`pack_removed_${removedRuntimePath.path.replaceAll("/", "_")}`);
   }
 
   if (packageInfo.filename && existsSync(join(repoRoot, packageInfo.filename))) {
@@ -251,6 +285,9 @@ function checkPublishWorkflow() {
     "contents: read",
     "id-token: write",
     "node-version: 24",
+    "CLI no-auth smoke",
+    "node bin/codex-usage-analyzer.js --help",
+    "node bin/codex-usage-analyzer.js --version",
     ["run: npm", "publish"].join(" ")
   ];
 
@@ -270,31 +307,74 @@ function checkPublishWorkflow() {
   return { detail: "trusted publishing workflow checks passed" };
 }
 
-function checkReleaseChecklist() {
-  const readme = readTextFile("README.md");
+function checkCiWorkflow() {
+  const workflow = readTextFile(".github/workflows/ci.yml");
   const requiredText = [
-    "Release Checklist",
-    ["npm", "version", "--no-git-tag-version"].join(" "),
-    "Publish Package",
-    "npm audit signatures",
-    "Do not paste raw production snapshot output"
+    "node-version: 20",
+    "run: npm test",
+    "run: npm pack --dry-run",
+    "CLI no-auth smoke",
+    "node bin/codex-usage-analyzer.js --help",
+    "node bin/codex-usage-analyzer.js --version"
   ];
 
   for (const text of requiredText) {
-    if (!readme.includes(text)) {
-      throw new Error(`readme_missing_${sanitizeId(text)}`);
+    if (!workflow.includes(text)) {
+      throw new Error(`ci_workflow_missing_${sanitizeId(text)}`);
     }
   }
 
-  return { detail: "README release checklist checks passed" };
+  return { detail: "Node 20 and no-auth smoke checks passed" };
+}
+
+function checkReleaseGuide() {
+  const guide = readTextFile("mydocs/manual/npm_release_guide.md");
+  const requiredText = [
+    ["npm", "version", "--no-git-tag-version"].join(" "),
+    "Publish Package",
+    "npm audit signatures",
+    "npm run release:preflight -- --release-ready",
+    "GitHub Release",
+    "실제 account usage JSON을"
+  ];
+
+  for (const text of requiredText) {
+    if (!guide.includes(text)) {
+      throw new Error(`release_guide_missing_${sanitizeId(text)}`);
+    }
+  }
+
+  const readme = readTextFile("README.md");
+  const forbiddenReadmeText = [
+    ["npm", "version", "--no-git-tag-version"].join(" "),
+    ["npm", "publish"].join(" "),
+    ["git", "tag"].join(" "),
+    "Publish Package",
+    "npm audit signatures",
+    "GitHub Release"
+  ];
+  const forbidden = forbiddenReadmeText.find((text) => readme.includes(text));
+
+  if (forbidden) {
+    throw new Error(`readme_contains_release_operation_${sanitizeId(forbidden)}`);
+  }
+
+  return { detail: "npm release guide checks passed" };
 }
 
 function checkSensitivePatterns() {
   const targetFiles = [
     "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "package.json",
+    "docs/account-usage-contract.md",
+    "docs/account-usage.schema.json",
+    "docs/downstream-integration.md",
+    ".github/workflows/ci.yml",
     ".github/workflows/publish.yml",
-    "scripts/release-preflight.js"
+    "scripts/release-preflight.js",
+    "mydocs/manual/npm_release_guide.md"
   ];
   const patterns = [
     { id: "local_user_path", regex: /\/Users\/[A-Za-z0-9._-]+/u },
