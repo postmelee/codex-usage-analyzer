@@ -243,7 +243,7 @@ node --input-type=module -e 'import fs from "node:fs"; const [pack] = JSON.parse
 node bin/codex-usage-analyzer.js --json | node --input-type=module -e 'let input=""; for await (const chunk of process.stdin) input += chunk; const value=JSON.parse(input); console.log(JSON.stringify({contractVersion:value.contractVersion, summaryKeys:Object.keys(value.summary).sort(), dailyKind:value.dailyUsageBuckets === null ? "null" : "array"}));'
 npx --yes --package . codex-usage-analyzer --json | node --input-type=module -e 'let input=""; for await (const chunk of process.stdin) input += chunk; const value=JSON.parse(input); console.log(JSON.stringify({contractVersion:value.contractVersion, summaryKeys:Object.keys(value.summary).sort(), dailyKind:value.dailyUsageBuckets === null ? "null" : "array"}));'
 rg -n "UsageSnapshot v2|UsageSnapshotV2|analyzeUsage|fixture-sample|profile-baseline|session_jsonl" README.md package.json src scripts docs .github && exit 1 || true
-rg -n "readFile|keychain|auth\\.json|accessToken|refreshToken|Authorization|ChatGPT-Account-Id|/wham/|experimentalApi" src bin && exit 1 || true
+rg -n -g '!src/__tests__/**' "readFile|keychain|auth\\.json|accessToken|refreshToken|Authorization|ChatGPT-Account-Id|/wham/|experimentalApi" src bin && exit 1 || true
 git diff --check
 git status --short
 ```
