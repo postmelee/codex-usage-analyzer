@@ -8,6 +8,10 @@ Read the account usage shown by Codex through the official app-server protocol, 
 
 `codex-usage-analyzer` starts your installed Codex CLI, calls `account/usage/read`, and emits a stable, identity-free contract. It does not scan local sessions or directly read authentication files, tokens, keychains, prompts, or responses.
 
+## Support
+Maintained with support from **OpenAI’s [Codex for Open Source](https://developers.openai.com/community/codex-for-oss)** program.
+> _Support is provided to the maintainer and does not imply endorsement._
+
 ## Quick start
 
 ```bash
