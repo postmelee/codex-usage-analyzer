@@ -1,75 +1,88 @@
-import {
-  analyzeUsage,
-  createSampleUsageSnapshotV2
-} from "./analyze.js";
+import { readAccountUsage } from "./account-usage.js";
+import { CodexUsageError } from "./errors.js";
+import { formatAccountUsage } from "./format-account-usage.js";
+
+export const PACKAGE_NAME = "codex-usage-analyzer";
+export const PACKAGE_VERSION = "0.2.0";
 
 const USAGE = [
+  "codex-usage-analyzer - Read your Codex account usage",
+  "",
   "Usage:",
-  "  codex-usage-analyzer analyze --json [--codex-home <path>]",
-  "  codex-usage-analyzer analyze --json --fixture-sample"
+  "  codex-usage-analyzer [usage] [--json]",
+  "  codex-usage-analyzer [usage] --help",
+  "  codex-usage-analyzer --version"
 ].join("\n");
 
-export async function runCli(argv, io = {}) {
+export async function runCli(argv, io = {}, dependencies = {}) {
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
+  const parsed = parseArguments(argv);
 
-  if (argv.includes("--help") || argv.includes("-h")) {
+  if (parsed.action === "help") {
     stdout.write(`${USAGE}\n`);
     return 0;
   }
 
-  const [command, ...flags] = argv;
+  if (parsed.action === "version") {
+    stdout.write(`${PACKAGE_VERSION}\n`);
+    return 0;
+  }
 
-  if (command !== "analyze") {
+  if (parsed.action === "invalid") {
     stderr.write(`${USAGE}\n`);
     return 1;
   }
 
-  const parsedFlags = parseAnalyzeFlags(flags);
-  if (!parsedFlags.ok) {
-    stderr.write(`${USAGE}\n`);
+  const readUsage = dependencies.readAccountUsage ?? readAccountUsage;
+  const formatUsage = dependencies.formatAccountUsage ?? formatAccountUsage;
+
+  try {
+    const usage = await readUsage();
+    const output = parsed.json
+      ? JSON.stringify(usage, null, 2)
+      : formatUsage(usage);
+    stdout.write(`${output}\n`);
+    return 0;
+  } catch (error) {
+    if (error instanceof CodexUsageError) {
+      stderr.write(`${PACKAGE_NAME}: ${error.message} [${error.code}]\n`);
+    } else {
+      stderr.write(`${PACKAGE_NAME}: Unexpected failure. [UNEXPECTED_ERROR]\n`);
+    }
+
     return 1;
   }
-
-  const snapshot = parsedFlags.fixtureSample
-    ? createSampleUsageSnapshotV2()
-    : await analyzeUsage({
-      codexHome: parsedFlags.codexHome
-    });
-  stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`);
-  return 0;
 }
 
-function parseAnalyzeFlags(flags) {
-  const parsed = {
-    codexHome: null,
-    fixtureSample: false,
-    hasJson: false,
-    ok: true
-  };
+function parseArguments(argv) {
+  const args = [...argv];
 
-  for (let index = 0; index < flags.length; index += 1) {
-    const flag = flags[index];
-
-    if (flag === "--json") {
-      parsed.hasJson = true;
-    } else if (flag === "--fixture-sample") {
-      parsed.fixtureSample = true;
-    } else if (flag === "--codex-home") {
-      const value = flags[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        return { ok: false };
-      }
-
-      parsed.codexHome = value;
-      index += 1;
-    } else {
-      return { ok: false };
-    }
+  if (args[0] === "usage") {
+    args.shift();
+  } else if (args[0] !== undefined && !args[0].startsWith("-")) {
+    return { action: "invalid" };
   }
 
-  return {
-    ...parsed,
-    ok: parsed.hasJson
-  };
+  if (args.length === 0) {
+    return { action: "usage", json: false };
+  }
+
+  if (args.length !== 1) {
+    return { action: "invalid" };
+  }
+
+  if (args[0] === "--json") {
+    return { action: "usage", json: true };
+  }
+
+  if (args[0] === "--help" || args[0] === "-h") {
+    return { action: "help" };
+  }
+
+  if (args[0] === "--version" || args[0] === "-v") {
+    return { action: "version" };
+  }
+
+  return { action: "invalid" };
 }

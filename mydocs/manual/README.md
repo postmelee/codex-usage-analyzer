@@ -26,6 +26,7 @@
 - `pr_command_guide.md`
 - `framework_lifecycle_guide.md`
 - `release_update_protocol.md`
+- `npm_release_guide.md`
 - `agent_code_hyperfall_rule_conflict.md`
 
 ## 사용 템플릿
@@ -50,3 +51,8 @@
 ## 다음 세션 AI가 복원해야 할 맥락
 
 현재 절차의 기준과 다른 문서와의 관계.
+
+## release 문서 구분
+
+- `npm_release_guide.md`: 이 저장소에서 배포하는 npm package의 version, Trusted Publishing, registry 검증 순서.
+- `release_update_protocol.md`: Hyper-Waterfall 프레임워크 자체의 release/tag 및 적용 저장소 update protocol.

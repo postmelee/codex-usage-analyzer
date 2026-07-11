@@ -1,343 +1,195 @@
 # codex-usage-analyzer
 
-`codex-usage-analyzer` is the local usage analysis package that emits `UsageSnapshot v2` JSON.
+[![npm package](https://img.shields.io/npm/v/codex-usage-analyzer)](https://www.npmjs.com/package/codex-usage-analyzer)
+[![CI](https://github.com/postmelee/codex-usage-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/postmelee/codex-usage-analyzer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The package is designed to be reused by product-specific CLIs and web services. It analyzes local usage sources and returns a validated snapshot; account identity, submit tokens, public profile URLs, and rendered cards belong to the product that wraps it.
+Read the account usage shown by Codex through the official app-server protocol, from one small CLI.
 
-## CLI
+`codex-usage-analyzer` starts your installed Codex CLI, calls `account/usage/read`, and emits a stable, identity-free contract. It does not scan local sessions or directly read authentication files, tokens, keychains, prompts, or responses.
 
-The published CLI entry point is:
-
-```bash
-npx codex-usage-analyzer@latest analyze --json
-```
-
-The `--json` mode writes a single `UsageSnapshot v2` object to stdout. Errors and usage text are written to stderr.
-
-The production `analyze --json` path reads local Codex session JSONL files from the Codex home directory. It uses `--codex-home <path>` when provided, otherwise `CODEX_HOME`, otherwise the default Codex home. When the session source is missing or unreadable, the command still emits a valid snapshot: required numeric totals are zero, unavailable usage details are `null` or empty arrays, and `extensions["codexUsageAnalyzer.diagnostics"]` explains the unavailable source. The production path does not return the sample fixture.
-
-The parser currently derives token totals, daily token buckets, model ranking, skill/plugin ranking, longest task duration, streaks, reasoning effort, and total thread count from allowlisted session event fields. Skill/plugin rankings are counted only from actual invocation events that can be classified by session tool catalog metadata; catalog or enabled-tool lists alone do not increment usage. Custom/local skill and plugin names may appear in `topSkills` and `topPlugins`, but the analyzer does not emit raw local file paths, raw JSONL lines, session ids, prompts, responses, tool input, or tool output.
-
-Streak fields are local-only analyzer results. The current parser treats a UTC date as active when local session JSONL contains positive `last_token_usage` for that date.
-
-Codex Desktop's profile screen is backed by its remote profile data and may include account-level usage that is no longer present in local session files, usage from another device, or data retained after local cleanup. For that reason, `activity.currentStreakDays` and `activity.longestStreakDays` are not guaranteed to match the Codex Desktop profile. The diagnostic extension includes `profileComparison.parity: "not_guaranteed"` when the analyzer has not compared against a remote profile baseline.
-
-The analyzer does not call Codex Desktop remote profile APIs or plugin-store APIs. `skills` and `plugins` are local session-derived fields, so they are unavailable when actual invocation source events are absent.
-
-`codexAssets.pet` is a safe logical reference, not an image export. The analyzer can report the Codex Desktop built-in pet catalog and the selected pet id when that setting is available. If no selected pet setting is persisted, it follows Codex Desktop's default and reports the built-in `codex` pet as `codex-built-in:pet:codex`. When a selected custom pet is found under `pets/<id>/pet.json` with an allowlisted spritesheet extension, the analyzer reports `codex-local:pet:custom-selected`.
-
-The default analyzer output does not include local file paths, custom pet directory names, image bytes, data URLs, or generated image artifacts. Files under `generated_images/` are treated as private generated artifacts and are not promoted to `codexAssets`. A wrapper that wants to render custom pet images in a web application must provide its own opt-in asset export, upload, or local serving layer.
-
-Local repository smoke command:
+## Quick start
 
 ```bash
-node bin/codex-usage-analyzer.js analyze --json
+npx --yes codex-usage-analyzer@latest
 ```
 
-Parser fixture smoke command:
+Human-readable output:
+
+```text
+Codex account usage
+
+Lifetime tokens    1.23B
+Peak daily tokens  45.6M
+Longest turn       12m 34s
+Current streak     3 days
+Longest streak     21 days
+Daily buckets      30 days
+
+Captured at 2026-07-11T00:00:00.000Z
+```
+
+The values above are synthetic. Your command reads the usage available to the currently signed-in Codex account.
+
+For machine-readable output:
 
 ```bash
-node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
+npx --yes codex-usage-analyzer@latest --json
 ```
-
-Asset fixture smoke command:
-
-```bash
-node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/assets
-```
-
-Development fixture command:
-
-```bash
-node bin/codex-usage-analyzer.js analyze --json --fixture-sample
-```
-
-The `--fixture-sample` mode is for tests, examples, and contract inspection only. It returns the packaged sample snapshot and must not be treated as real local Codex usage.
-
-## Profile Parity Smoke (Repository Only)
-
-Use the profile smoke helper from a repository checkout when you want to compare
-a local analyzer result with values manually copied from Codex Desktop's profile
-UI. The comparison uses a redacted baseline file; do not commit a baseline copied
-from a real account.
-
-The helper is not published as an npm package binary. It is a maintainer QA
-tool for release and parser parity checks.
-
-Create a production snapshot:
-
-```bash
-node bin/codex-usage-analyzer.js analyze --json > <local-snapshot.json>
-```
-
-Create a redacted baseline using
-`src/__tests__/fixtures/profile-baseline/redacted-baseline.json` as the shape
-reference, then compare:
-
-```bash
-node scripts/profile-smoke.js --baseline <redacted-baseline.json> --snapshot <local-snapshot.json>
-```
-
-The smoke output is a field-level summary. Result statuses mean:
-
-- `match`: expected and actual values are equal.
-- `within_tolerance`: numeric values differ only within the baseline tolerance.
-- `mismatch`: the field is comparable and differs outside tolerance.
-- `not_comparable`: the baseline intentionally marks the field as visible in
-  profile UI but not comparable to local analyzer data.
-- `skipped`: the baseline did not include that expected field.
-
-Mismatch reasons distinguish parser-bug candidates from expected source
-differences:
-
-- `numeric_mismatch`, `value_mismatch`, `actual_field_absent`, and ranking
-  shape reasons mean a comparable field differed.
-- `source_mismatch` means the baseline author marked that field as comparing
-  different sources, such as remote profile data versus local analyzer data.
-- `profile_parity_not_guaranteed` means the local snapshot itself reports that
-  remote profile parity is not guaranteed, and the field is source-sensitive.
-- `remote_profile_source_differs` is used with `not_comparable` fields that
-  should be visible in the profile baseline but intentionally not compared.
-
-Use optional baseline `sourcePolicy` metadata to keep a field comparable while
-labeling source-driven differences:
 
 ```json
 {
-  "sourcePolicy": {
-    "activity.totalThreads": "source_mismatch",
-    "skills.topSkills": "source_mismatch",
-    "plugins.topPlugins": "source_mismatch"
-  }
+  "contractVersion": 1,
+  "capturedAt": "2026-07-11T00:00:00.000Z",
+  "summary": {
+    "lifetimeTokens": 1234567890,
+    "peakDailyTokens": 45600000,
+    "longestRunningTurnSec": 754,
+    "currentStreakDays": 3,
+    "longestStreakDays": 21
+  },
+  "dailyUsageBuckets": [
+    {
+      "startDate": "2026-07-10",
+      "tokens": 123456
+    }
+  ]
 }
 ```
 
-`sourcePolicy` belongs only to the redacted smoke baseline. It is not part of
-`UsageSnapshot v2`, and the analyzer output schema does not change. A
-source-aware mismatch still makes the smoke command exit nonzero; the field
-reason is what separates source differences from likely parser regressions.
+## Why this CLI
 
-Known mismatch reasons:
+- **Account-level source:** use the same app-server method intended for Codex account usage instead of estimating from retained local files.
+- **Privacy-first boundary:** receive usage metrics without adding names, usernames, avatars, emails, account identifiers, or credentials to the output.
+- **Stable integration:** consume a versioned JSON contract with allowlisted fields and explicit `null` semantics.
+- **Small runtime:** use Node.js built-ins and the Codex CLI already installed on your machine; there are no runtime package dependencies.
 
-- Codex Desktop profile values can come from a remote account-level source,
-  while this analyzer reads local session files and local Codex metadata.
-- Local cleanup, migration, archiving, deletion, or another device can make the
-  profile UI and local analyzer cover different source ranges.
-- Streaks use the analyzer's UTC date buckets from local token events; profile
-  UI can use remote activity data.
-- Activity insights and thread counts can differ when the profile UI aggregates
-  remote account-level data and the analyzer reads retained local sessions.
-- Top skills/plugins require actual local invocation events. Catalog, enabled
-  tool lists, or remote profile rankings alone are not counted.
-- `--fixture-sample` snapshots are rejected by the profile smoke helper, so a
-  packaged example cannot pass as a real profile parity check.
+## Supported metrics
 
-Redaction rules for real local baselines:
+| Field | Meaning |
+|---|---|
+| `summary.lifetimeTokens` | Lifetime token usage |
+| `summary.peakDailyTokens` | Highest token usage reported for one day |
+| `summary.longestRunningTurnSec` | Longest-running turn, in seconds |
+| `summary.currentStreakDays` | Current activity streak, in days |
+| `summary.longestStreakDays` | Longest activity streak, in days |
+| `dailyUsageBuckets` | Source-dated daily token buckets, when available |
 
-- Keep only profile-visible numbers, model ids, ranking ids, and explicit
-  tolerance values needed for comparison.
-- Do not include real account handles, emails, local private paths, credential
-  material, conversation identifiers, conversation titles, prompts, responses,
-  tool input/output bodies, image captures, or unredacted session JSONL.
+Every summary field is present. A value of `null` means the upstream method did not provide that metric; it does not mean zero. Daily buckets can likewise be `null`, an empty array, or an array of dated values.
+
+## Requirements
+
+- Node.js 20 or newer
+- A recent Codex CLI available as `codex` on `PATH`
+- A ChatGPT-backed Codex sign-in that supports `account/usage/read`
+
+API-key-only and Bedrock authentication do not provide this account usage method. Sign in through the installed Codex CLI before running the analyzer. The package delegates authentication to Codex and never asks you to paste a token.
+
+## CLI reference
+
+```text
+codex-usage-analyzer - Read your Codex account usage
+
+Usage:
+  codex-usage-analyzer [usage] [--json]
+  codex-usage-analyzer [usage] --help
+  codex-usage-analyzer --version
+```
+
+| Command | Output |
+|---|---|
+| `codex-usage-analyzer` | Human-readable account usage |
+| `codex-usage-analyzer usage` | Same human-readable output |
+| `codex-usage-analyzer --json` | Account Usage Contract JSON |
+| `codex-usage-analyzer usage --json` | Same JSON output |
+| `codex-usage-analyzer --help` | Help without starting app-server |
+| `codex-usage-analyzer --version` | Package version without starting app-server |
+
+Successful output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr.
 
 ## SDK
 
 ```js
 import {
-  analyzeUsage,
-  assertUsageSnapshotV2,
-  createSampleUsageSnapshotV2,
-  validateUsageSnapshotV2
+  ACCOUNT_USAGE_CONTRACT_VERSION,
+  CodexUsageError,
+  readAccountUsage
 } from "codex-usage-analyzer";
 
-const snapshot = await analyzeUsage();
-assertUsageSnapshotV2(snapshot);
+try {
+  const usage = await readAccountUsage({ timeoutMs: 15_000 });
+  console.log(usage.contractVersion === ACCOUNT_USAGE_CONTRACT_VERSION);
+} catch (error) {
+  if (error instanceof CodexUsageError) {
+    console.error(error.code);
+  }
+}
 ```
 
-`analyzeUsage()` returns the production analyzer result. You can pass `codexHome` for deterministic tests or custom Codex home discovery:
+The SDK returns the same document as CLI `--json`. See the [Account Usage Contract](docs/account-usage-contract.md) and [JSON Schema](docs/account-usage.schema.json) for field and compatibility rules.
 
-```js
-const snapshot = await analyzeUsage({
-  codexHome: "/path/to/codex-home"
-});
+## How it works
+
+1. Spawn `codex app-server` without a shell.
+2. Complete the stable app-server initialization handshake.
+3. Call `account/usage/read`.
+4. Allowlist and validate the supported fields.
+5. Stop the child process and return the normalized document.
+
+The package has no direct credential reader and no private profile endpoint fallback. Authentication and service communication remain inside the installed Codex process.
+
+## Downstream integrations
+
+Profile sites, README cards, and other services can accept the identity-free JSON contract and combine it with identity they manage separately. The [Downstream Integration Guide](docs/downstream-integration.md) defines recommended field names, ownership, submit-token, validation, rendering, caching, and deletion boundaries.
+
+Do not add identity fields to the account usage document. A downstream service should resolve GitHub identity from its own authenticated account binding, not trust a display name or avatar submitted by this CLI.
+
+## Privacy and Security
+
+The default CLI does not directly read or emit:
+
+- access tokens, refresh tokens, cookies, or keychain entries
+- names, usernames, avatars, emails, or account identifiers
+- prompts, responses, tool input, tool output, or local session files
+- local filesystem paths, raw RPC responses, or raw app-server stderr
+
+Treat account usage as private data even though the contract excludes identity. Review a downstream service's retention and visibility policy before submitting output anywhere.
+
+For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md).
+
+## Troubleshooting
+
+| Error code | What to check |
+|---|---|
+| `CODEX_NOT_FOUND` | Install or update Codex and confirm `codex` is on `PATH`. |
+| `APP_SERVER_START_FAILED` or `APP_SERVER_EXITED` | Confirm the installed Codex CLI can start and that your environment permits child processes. |
+| `APP_SERVER_TIMEOUT` | Retry after checking connectivity; SDK callers can set `timeoutMs` up to 120000. |
+| `APP_SERVER_RPC_ERROR` | Update Codex and confirm a compatible ChatGPT-backed sign-in. |
+| `APP_SERVER_PROTOCOL_ERROR` or `INVALID_ACCOUNT_USAGE_RESPONSE` | Update both Codex and this package; the upstream response was not safe to normalize. |
+
+The CLI intentionally suppresses raw upstream details. When reporting a bug, include the package version, Codex version, Node.js version, platform, command shape, and error code only.
+
+## Development
+
+```bash
+npm test
+npm pack --dry-run
 ```
 
-When a local source is unavailable, fields use zero, `null`, empty arrays, and a namespaced diagnostic extension rather than sample values.
+Maintainers should use the repository's [npm release guide](mydocs/manual/npm_release_guide.md) for release operations; those steps are intentionally kept out of the user guide.
 
-Use `createSampleUsageSnapshotV2()` only for examples, tests, and contract inspection.
+## Contributing
 
-Public exports:
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Changes to the public contract need an issue and explicit consumer-impact review.
 
-- `analyzeUsage(options?)`
-- `createSampleUsageSnapshotV2(overrides?)`
-- `validateUsageSnapshotV2(value)`
-- `assertUsageSnapshotV2(value)`
-- `isUsageSnapshotV2(value)`
-- `USAGE_SNAPSHOT_V2_SCHEMA_VERSION`
-- `sampleUsageSnapshotV2`
+## Support
 
-## Package Contents
-
-The npm package includes the CLI entry point, runtime analyzer source, parser
-modules, snapshot validators, type declarations, and the sample snapshot fixture
-used by the SDK. It excludes repository tests, parser fixtures, working docs,
-and repository-only smoke helper scripts.
+Use [GitHub Issues](https://github.com/postmelee/codex-usage-analyzer/issues) for reproducible bugs and focused feature requests. Use GitHub's private vulnerability reporting path for security-sensitive reports.
 
 ## License
 
-The source code and associated documentation in this repository are available
-under the MIT License. See `LICENSE`.
+Copyright (c) postmelee. Released under the [MIT License](LICENSE).
 
-This license applies only to this repository's code and documentation. It does
-not grant rights to OpenAI, Codex, OpenAI services, user local data, Codex
-Desktop assets, model outputs, trademarks, or third-party content. This project
-is not affiliated with, endorsed by, or sponsored by OpenAI.
+This license covers only this repository's code and documentation. It does not grant rights to OpenAI services, Codex assets, user data, model outputs, trademarks, or third-party content.
 
-## Ownership Boundary
-
-The analyzer owns local usage fields such as token totals, token breakdown, model usage, skill usage, plugin usage, activity statistics, and safe Codex pet logical references.
-
-Web products own GitHub login, display name, avatar URL, bio, profile visibility, submit tokens, devices, public URLs, rendered cards, and any uploaded or web-served pet image assets.
-
-Product-specific wrappers can call this SDK and submit the resulting snapshot to their own service:
-
-```js
-import {
-  analyzeUsage,
-  assertUsageSnapshotV2
-} from "codex-usage-analyzer";
-
-const snapshot = assertUsageSnapshotV2(await analyzeUsage());
-await submitToProductService({ snapshot });
-```
-
-Wrapper metadata such as bearer tokens, device ids, account handles, visibility, GitHub bio, GitHub avatar URLs, custom pet upload URLs, and card-only rendering hints must stay outside the analyzer snapshot.
-
-## Tests
-
-```bash
-npm test
-node bin/codex-usage-analyzer.js analyze --json
-node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/parser
-node bin/codex-usage-analyzer.js analyze --json --codex-home src/__tests__/fixtures/assets
-node bin/codex-usage-analyzer.js analyze --json --fixture-sample
-```
-
-The test suite validates the SDK exports, production parser behavior, asset safe output behavior, fixture-only CLI behavior, and `UsageSnapshot v2` schema rules.
-
-## Release Checklist
-
-Use this order for every npm release after `0.1.0`. npm does not allow
-reusing a published package name and version, so every follow-up publish must
-choose a new `package.json` version first.
-
-Choose the version bump before opening a release prep PR:
-
-- Patch: backwards-compatible bug fixes, documentation corrections, package
-  metadata corrections, or release process corrections.
-- Minor: backwards-compatible CLI, API, or analyzer capability additions.
-- Major: breaking CLI, API, package, or `UsageSnapshot v2` behavior changes.
-
-Treat `UsageSnapshot v2` contract changes as a separate issue with consumer
-impact analysis before choosing the release version.
-
-In the release prep PR, update only the package version and related release
-notes. Do not create a git tag, GitHub Release, or npm publish from the release
-prep PR.
-
-```bash
-npm version --no-git-tag-version <patch|minor|major>
-npm test
-npm pack --dry-run
-node bin/codex-usage-analyzer.js analyze --json
-npx --yes github:postmelee/codex-usage-analyzer analyze --json
-npm run release:preflight
-```
-
-Review `package.json` and the `npm pack --dry-run` file list before merging.
-The version bump PR must be merged to `main` before publishing. The default
-preflight mode is advisory: it can warn about release-ready conditions that are
-expected before the PR is merged, such as a missing release tag.
-
-After the version bump PR is merged, tag the `main` merge commit:
-
-```bash
-git checkout main
-git pull --ff-only
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-Run strict preflight before publishing:
-
-```bash
-npm run release:preflight -- --release-ready
-```
-
-Trusted publishing setup for maintainers:
-
-- Configure the npm package's Trusted Publisher setting for GitHub Actions.
-- Use workflow filename `publish.yml` and allowed action `npm publish`.
-- Do not add npm token secrets to the publish workflow; it uses GitHub Actions
-  OIDC with `id-token: write`.
-- Do not pass `--provenance`; trusted publishing generates provenance
-  automatically.
-- Do not run the publish workflow until the version bump PR has been merged and
-  the matching `vX.Y.Z` tag has been pushed.
-
-Confirm the registry state before running the manual-only publish workflow:
-
-```bash
-npm view codex-usage-analyzer version dist-tags --json
-```
-
-Then publish from GitHub Actions:
-
-```text
-GitHub Actions -> Publish Package -> Run workflow
-```
-
-After the package is published, verify the registry version and smoke the
-published CLI:
-
-```bash
-npm view codex-usage-analyzer version dist-tags --json
-npx --yes codex-usage-analyzer@latest analyze --json
-```
-
-Verify registry signatures in a throwaway verification project:
-
-```bash
-VERIFY_DIR="$(mktemp -d)"
-cd "$VERIFY_DIR"
-npm init -y
-npm install codex-usage-analyzer@latest
-npm audit signatures
-```
-
-Create the GitHub Release only after npm publish, `npx @latest` smoke, and
-signature verification have passed. Use the pushed `vX.Y.Z` tag and record the
-new npm version, structural smoke result, signature verification result, and any
-known limitations.
-
-Do not paste raw production snapshot output into release notes, PR bodies, or
-issue comments. Record only structural pass/fail results, exit codes, and
-package metadata needed for release verification.
-
-## Non-Goals
-
-This package does not:
-
-- perform GitHub OAuth
-- use private Codex Desktop profile endpoints
-- export custom pet image files by default
-- issue or store submit tokens
-- own public profile handles
-- render cards or images
-- update GitHub README files
-- upload raw credential files
-- expose local private paths
-
-## Status
-
-This repository is the standalone home for the analyzer package. Version `0.1.0` is published to npm and verified with `npx codex-usage-analyzer@latest analyze --json`. The production analyzer path is separated from the packaged sample fixture, and the release checklist above is the maintainer path for future npm publishing and npx verification. Broader parity work against Codex Desktop profile data remains outside the npm release flow.
+This independent project is not affiliated with, endorsed by, or sponsored by OpenAI. OpenAI and Codex names and trademarks belong to their respective owners.

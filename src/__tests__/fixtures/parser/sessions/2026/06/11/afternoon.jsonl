@@ -1,3 +1,0 @@
-{"timestamp":"2026-06-11T14:00:00.000Z","type":"event_msg","payload":{"type":"token_count","model":"gpt-5-codex","effort":"high","duration_ms":180000,"last_token_usage":{"total_tokens":2000},"total_token_usage":{"total_tokens":4200}}}
-{not-json
-{"timestamp":"2026-06-11T15:30:00.000Z","type":"event_msg","payload":{"type":"token_count","model":"gpt-5-codex","effort":"medium","mode":"fast","duration_ms":240000,"last_token_usage":{"input_tokens":1200,"output_tokens":300,"cached_input_tokens":100,"reasoning_output_tokens":80,"total_tokens":1680},"total_token_usage":{"total_tokens":5880}}}

@@ -61,6 +61,11 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: CLI no-auth smoke
+        run: |
+          node bin/codex-usage-analyzer.js --help
+          node bin/codex-usage-analyzer.js --version
+
       - name: Package dry run
         run: npm pack --dry-run
 
