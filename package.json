@@ -34,6 +34,7 @@
     "docs",
     "src/account-usage.js",
     "src/app-server-client.js",
+    "src/codex-executable.js",
     "src/cli.js",
     "src/errors.js",
     "src/format-account-usage.js",

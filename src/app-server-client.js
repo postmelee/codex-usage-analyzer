@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
+import { resolveCodexExecutable } from "./codex-executable.js";
 import { CODEX_USAGE_ERROR_CODES, CodexUsageError } from "./errors.js";
 
 export const DEFAULT_APP_SERVER_TIMEOUT_MS = 15_000;
@@ -12,10 +13,26 @@ const ACCOUNT_USAGE_REQUEST_ID = 1;
 export async function requestAccountUsageFromAppServer(options = {}) {
   const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
   const spawnProcess = options.spawnProcess ?? spawn;
+  const resolveExecutable = options.resolveExecutable ?? resolveCodexExecutable;
+  let command;
   let child;
 
   try {
-    child = spawnProcess("codex", ["app-server"], {
+    command = await resolveExecutable();
+  } catch {
+    return Promise.reject(new CodexUsageError(
+      CODEX_USAGE_ERROR_CODES.APP_SERVER_START_FAILED
+    ));
+  }
+
+  if (command === null) {
+    return Promise.reject(new CodexUsageError(
+      CODEX_USAGE_ERROR_CODES.CODEX_NOT_FOUND
+    ));
+  }
+
+  try {
+    child = spawnProcess(command, ["app-server"], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
