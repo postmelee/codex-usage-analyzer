@@ -6,7 +6,7 @@
 
 Read the account usage shown by Codex through the official app-server protocol, from one small CLI.
 
-`codex-usage-analyzer` starts your installed Codex CLI, calls `account/usage/read`, and emits a stable, identity-free contract. It does not scan local sessions or directly read authentication files, tokens, keychains, prompts, or responses.
+`codex-usage-analyzer` starts a compatible Codex process from your installed CLI or macOS app, calls `account/usage/read`, and emits a stable, identity-free contract. It does not scan local sessions or directly read authentication files, tokens, keychains, prompts, or responses.
 
 > **Documented upstream:** This CLI uses OpenAI Codex's documented
 > [`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
@@ -19,7 +19,7 @@ Maintained with support from **OpenAI’s [Codex for Open Source](https://develo
 ## Quick start
 
 ```bash
-npx --yes codex-usage-analyzer@latest
+npx codex-usage-analyzer@latest
 ```
 
 Human-readable output:
@@ -42,7 +42,7 @@ The values above are synthetic. Your command reads the usage available to the cu
 For machine-readable output:
 
 ```bash
-npx --yes codex-usage-analyzer@latest --json
+npx codex-usage-analyzer@latest --json
 ```
 
 ```json
@@ -70,7 +70,7 @@ npx --yes codex-usage-analyzer@latest --json
 - **Account-level source:** use the same app-server method intended for Codex account usage instead of estimating from retained local files.
 - **Privacy-first boundary:** receive usage metrics without adding names, usernames, avatars, emails, account identifiers, or credentials to the output.
 - **Stable integration:** consume a versioned JSON contract with allowlisted fields and explicit `null` semantics.
-- **Small runtime:** use Node.js built-ins and the Codex CLI already installed on your machine; there are no runtime package dependencies.
+- **Small runtime:** use Node.js built-ins and a Codex CLI or compatible macOS app already on your machine; there are no runtime package dependencies.
 
 ## Codex lookup benchmark
 
@@ -100,10 +100,10 @@ Every summary field is present. A value of `null` means the upstream method did 
 ## Requirements
 
 - Node.js 20 or newer
-- A recent Codex CLI available as `codex` on `PATH`
+- A recent Codex CLI available as `codex` on `PATH`, or a compatible macOS ChatGPT app or Codex app installed in a standard Applications location
 - A ChatGPT-backed Codex sign-in that supports `account/usage/read`
 
-API-key-only and Bedrock authentication do not provide this account usage method. Sign in through the installed Codex CLI before running the analyzer. The package delegates authentication to Codex and never asks you to paste a token.
+API-key-only and Bedrock authentication do not provide this account usage method. Sign in through Codex before running the analyzer. The package delegates authentication to the selected Codex CLI or app and never asks you to paste a token.
 
 ## CLI reference
 
@@ -150,13 +150,15 @@ The SDK returns the same document as CLI `--json`. See the [Account Usage Contra
 
 ## How it works
 
-1. Spawn `codex app-server` without a shell.
-2. Complete the stable app-server initialization handshake.
-3. Call `account/usage/read`.
-4. Allowlist and validate the supported fields.
-5. Stop the child process and return the normalized document.
+1. Prefer the `codex` executable available on `PATH`.
+2. On macOS, fall back to a compatible ChatGPT or Codex app bundle in a standard Applications location.
+3. Spawn the selected Codex executable with `app-server`, without a shell.
+4. Complete the stable app-server initialization handshake.
+5. Call `account/usage/read`.
+6. Allowlist and validate the supported fields.
+7. Stop the child process and return the normalized document.
 
-The package has no direct credential reader and no private profile endpoint fallback. Authentication and service communication remain inside the installed Codex process.
+The package has no direct credential reader and no private profile endpoint fallback. Authentication and service communication remain inside the selected Codex process.
 
 ## Downstream integrations
 
@@ -181,8 +183,8 @@ For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.m
 
 | Error code | What to check |
 |---|---|
-| `CODEX_NOT_FOUND` | Install or update Codex and confirm `codex` is on `PATH`. |
-| `APP_SERVER_START_FAILED` or `APP_SERVER_EXITED` | Confirm the installed Codex CLI can start and that your environment permits child processes. |
+| `CODEX_NOT_FOUND` | Install or update a Codex CLI on `PATH`, or install a compatible macOS ChatGPT or Codex app in a standard Applications location. |
+| `APP_SERVER_START_FAILED` or `APP_SERVER_EXITED` | Confirm the selected Codex CLI or app can start and that your environment permits child processes. |
 | `APP_SERVER_TIMEOUT` | Retry after checking connectivity; SDK callers can set `timeoutMs` up to 120000. |
 | `APP_SERVER_RPC_ERROR` | Update Codex and confirm a compatible ChatGPT-backed sign-in. |
 | `APP_SERVER_PROTOCOL_ERROR` or `INVALID_ACCOUNT_USAGE_RESPONSE` | Update both Codex and this package; the upstream response was not safe to normalize. |

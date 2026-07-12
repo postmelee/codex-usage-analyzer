@@ -13,7 +13,7 @@ const ERROR_MESSAGES = Object.freeze({
   [CODEX_USAGE_ERROR_CODES.INVALID_TIMEOUT]:
     "timeoutMs must be an integer between 1 and 120000.",
   [CODEX_USAGE_ERROR_CODES.CODEX_NOT_FOUND]:
-    "Codex CLI was not found. Install or update Codex, then sign in with ChatGPT.",
+    "Codex CLI or compatible app was not found. Install or update Codex, then sign in with ChatGPT.",
   [CODEX_USAGE_ERROR_CODES.APP_SERVER_START_FAILED]:
     "Codex app-server could not be started.",
   [CODEX_USAGE_ERROR_CODES.APP_SERVER_EXITED]:

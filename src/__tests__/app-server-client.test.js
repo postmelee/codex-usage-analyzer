@@ -6,6 +6,13 @@ import test from "node:test";
 import { requestAccountUsageFromAppServer } from "../app-server-client.js";
 import { CODEX_USAGE_ERROR_CODES, CodexUsageError } from "../errors.js";
 
+function requestWithResolvedCodex(options = {}) {
+  return requestAccountUsageFromAppServer({
+    resolveExecutable: async () => "codex",
+    ...options
+  });
+}
+
 test("performs the stable app-server handshake before reading account usage", async () => {
   const messages = [];
   const child = new FakeChild((message) => {
@@ -25,7 +32,7 @@ test("performs the stable app-server handshake before reading account usage", as
   });
   let spawnCall;
 
-  const result = await requestAccountUsageFromAppServer({
+  const result = await requestWithResolvedCodex({
     spawnProcess(command, args, options) {
       spawnCall = { command, args, options };
       return child;
@@ -62,11 +69,69 @@ test("performs the stable app-server handshake before reading account usage", as
   assert.equal(child.killed, true);
 });
 
-test("maps a missing Codex executable to a safe error", async () => {
+test("spawns a synthetic app bundle executable selected by the resolver", async () => {
+  const appCommand = "/synthetic-app/Contents/Resources/codex";
+  const child = new FakeChild((message) => {
+    if (message.id === 0) {
+      child.respond({ id: 0, result: {} });
+    } else if (message.id === 1) {
+      child.respond({ id: 1, result: { summary: {} } });
+    }
+  });
+  let spawnCommand;
+
+  await requestWithResolvedCodex({
+    resolveExecutable: async () => appCommand,
+    spawnProcess(command) {
+      spawnCommand = command;
+      return child;
+    }
+  });
+
+  assert.equal(spawnCommand, appCommand);
+  assert.equal(child.killed, true);
+});
+
+test("maps an unavailable resolver result without spawning", async () => {
+  let spawned = false;
+
+  await assert.rejects(
+    requestWithResolvedCodex({
+      resolveExecutable: async () => null,
+      spawnProcess() {
+        spawned = true;
+      }
+    }),
+    (error) => {
+      assert.equal(error.code, CODEX_USAGE_ERROR_CODES.CODEX_NOT_FOUND);
+      assert.equal(spawned, false);
+      return true;
+    }
+  );
+});
+
+test("maps unexpected resolver failures without exposing details", async () => {
+  const privateDetail = "synthetic-private-resolver-detail";
+
+  await assert.rejects(
+    requestWithResolvedCodex({
+      resolveExecutable: async () => {
+        throw new Error(privateDetail);
+      }
+    }),
+    (error) => {
+      assert.equal(error.code, CODEX_USAGE_ERROR_CODES.APP_SERVER_START_FAILED);
+      assert.equal(String(error).includes(privateDetail), false);
+      return true;
+    }
+  );
+});
+
+test("maps a missing resolved Codex executable to a safe error", async () => {
   const child = new FakeChild(() => {});
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({
+    requestWithResolvedCodex({
       spawnProcess() {
         queueMicrotask(() => {
           child.emit(
@@ -103,7 +168,7 @@ test("maps RPC errors without exposing the upstream message", async () => {
   });
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({ spawnProcess: () => child }),
+    requestWithResolvedCodex({ spawnProcess: () => child }),
     (error) => {
       assert.equal(error.code, CODEX_USAGE_ERROR_CODES.APP_SERVER_RPC_ERROR);
       assert.equal(error.rpcCode, -32000);
@@ -122,7 +187,7 @@ test("rejects malformed JSON protocol output", async () => {
   });
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({ spawnProcess: () => child }),
+    requestWithResolvedCodex({ spawnProcess: () => child }),
     (error) => {
       assert.equal(error.code, CODEX_USAGE_ERROR_CODES.APP_SERVER_PROTOCOL_ERROR);
       assert.equal(child.killed, true);
@@ -139,7 +204,7 @@ test("rejects an early app-server exit", async () => {
   });
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({ spawnProcess: () => child }),
+    requestWithResolvedCodex({ spawnProcess: () => child }),
     (error) => {
       assert.equal(error.code, CODEX_USAGE_ERROR_CODES.APP_SERVER_EXITED);
       return true;
@@ -151,7 +216,7 @@ test("times out and stops an unresponsive app-server", async () => {
   const child = new FakeChild(() => {});
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({
+    requestWithResolvedCodex({
       spawnProcess: () => child,
       timeoutMs: 10
     }),
@@ -167,7 +232,7 @@ test("validates timeout bounds before spawning", async () => {
   let spawned = false;
 
   await assert.rejects(
-    requestAccountUsageFromAppServer({
+    requestWithResolvedCodex({
       timeoutMs: 0,
       spawnProcess() {
         spawned = true;
