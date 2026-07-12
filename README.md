@@ -8,6 +8,10 @@ Read the account usage shown by Codex through the official app-server protocol, 
 
 `codex-usage-analyzer` starts your installed Codex CLI, calls `account/usage/read`, and emits a stable, identity-free contract. It does not scan local sessions or directly read authentication files, tokens, keychains, prompts, or responses.
 
+> **Documented upstream:** This CLI uses OpenAI Codex's documented
+> [`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+> app-server method.
+
 ## Support
 Maintained with support from **OpenAI’s [Codex for Open Source](https://developers.openai.com/community/codex-for-oss)** program.
 > _Support is provided to the maintainer and does not imply endorsement._
@@ -67,6 +71,18 @@ npx --yes codex-usage-analyzer@latest --json
 - **Privacy-first boundary:** receive usage metrics without adding names, usernames, avatars, emails, account identifiers, or credentials to the output.
 - **Stable integration:** consume a versioned JSON contract with allowlisted fields and explicit `null` semantics.
 - **Small runtime:** use Node.js built-ins and the Codex CLI already installed on your machine; there are no runtime package dependencies.
+
+## Codex lookup benchmark
+
+Lower is faster. This snapshot measured one warm environment on 2026-07-13 with one warm-up and five timed runs.
+
+| Tool | Median | Relative time |
+|---|---:|---:|
+| `codex-usage-analyzer@0.2.0` | 1.145s | 1.0x |
+| `ccusage@20.0.17` | 3.306s | 2.9x |
+| `tokscale@4.4.1` | 19.723s | 17.2x |
+
+This compares Codex usage lookup only, not whole products or every workflow they support. The data sources also differ: `codex-usage-analyzer` reads account-level usage through app-server, while the comparison commands scan retained local Codex session history. See the [benchmark methodology, environment, command arrays, and limitations](docs/codex-lookup-benchmark.md).
 
 ## Supported metrics
 
