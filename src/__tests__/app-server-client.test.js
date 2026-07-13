@@ -55,7 +55,7 @@ test("performs the stable app-server handshake before reading account usage", as
         clientInfo: {
           name: "codex_usage_analyzer",
           title: "Codex Usage Analyzer",
-          version: "0.2.0"
+          version: "0.3.0"
         }
       }
     },
