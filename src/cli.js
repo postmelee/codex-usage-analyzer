@@ -3,7 +3,7 @@ import { CodexUsageError } from "./errors.js";
 import { formatAccountUsage } from "./format-account-usage.js";
 
 export const PACKAGE_NAME = "codex-usage-analyzer";
-export const PACKAGE_VERSION = "0.2.0";
+export const PACKAGE_VERSION = "0.3.0";
 
 const USAGE = [
   "codex-usage-analyzer - Read your Codex account usage",
