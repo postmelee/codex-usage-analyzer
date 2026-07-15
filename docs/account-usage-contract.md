@@ -6,6 +6,11 @@ The contract is a minimal, stable projection of the official Codex app-server `a
 
 The machine-readable source of truth is [`account-usage.schema.json`](account-usage.schema.json).
 
+The opt-in `profile --json` command does not extend this contract. It returns a
+separate [Experimental Full Profile Envelope](experimental-full-profile.md) that
+nests one unchanged Account Usage Contract document under `usage`. The stable SDK
+continues to expose only this identity-free contract.
+
 ## Shape
 
 ```json

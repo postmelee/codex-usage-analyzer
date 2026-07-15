@@ -154,6 +154,20 @@ test("returns partial with stable null fields for incomplete remote categories",
   assert.equal(JSON.stringify(result).includes("synthetic-private-id"), false);
 });
 
+test("rounds finite private percentages to whole-percent UI values", () => {
+  const remote = createRemoteProfile();
+  remote.stats.fast_mode_usage_percentage = 34.6;
+  remote.stats.most_used_reasoning_effort_percentage = 75.5;
+
+  const result = normalizeFullProfileResult(createUsage(), remote, {
+    planType: "synthetic-plan"
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.activityInsights.fastModePercent, 35);
+  assert.equal(result.activityInsights.reasoningEffortPercent, 76);
+});
+
 test("distinguishes unavailable and empty top invocations", () => {
   const unavailableRemote = createRemoteProfile();
   unavailableRemote.stats.top_invocations = null;

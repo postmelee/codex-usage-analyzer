@@ -2,7 +2,7 @@
 
 This guide defines the boundary between `codex-usage-analyzer` and a service that stores account usage or renders a profile card.
 
-The CLI owns one artifact: the identity-free [Account Usage Contract](account-usage-contract.md). A downstream service owns identity, authorization, submission, persistence, rendering, cache behavior, privacy controls, and deletion.
+The stable CLI and SDK own one artifact: the identity-free [Account Usage Contract](account-usage-contract.md). An explicit CLI-only experiment can emit a separate [Full Profile Envelope](experimental-full-profile.md). A downstream service owns identity, authorization, submission, persistence, rendering, cache behavior, privacy controls, and deletion.
 
 ## Recommended architecture
 
@@ -157,36 +157,36 @@ Deletion should invalidate caches where possible and make the stable image URL r
 
 ## Experimental profile identity
 
-A future adapter for private or undocumented profile endpoints such as `/wham/profiles/me` must remain separate from the default CLI and its contract. It is not implemented by `codex-usage-analyzer`.
+`codex-usage-analyzer profile --json` explicitly calls the unsupported `/wham/profiles/me` endpoint and returns a separate Full Profile Envelope. It does not change the default command, the Account Usage Contract, or the public SDK. A downstream must not silently substitute this envelope for the normal submit body.
 
-If a downstream chooses to experiment with such an adapter:
+If a downstream chooses to accept this experimental envelope:
 
 - require explicit opt-in for every invocation
 - label the source unstable and unsupported
 - never silently fall back to it
 - never use its identity as authentication, authorization, or account ownership proof
-- allowlist only cosmetic fields and discard usage metrics from that response
+- validate `fullProfileContractVersion`, `kind`, `stability`, the complete field set, and `status`
+- trust only nested `usage` for canonical token and streak metrics
+- never reconstruct canonical usage from private profile stats or activity fields
 - never persist or log raw responses, credentials, account identifiers, or private URLs
 - sanitize and re-host an avatar instead of exposing a raw remote URL to viewers
 - make failure non-fatal to the official account usage path
 
-A separate downstream-owned envelope may use these field names:
+GitHub identity should remain the default display source and the only account binding. Treat `profile.displayName`, `profile.username`, `profile.planType`, invocation names, and every other experimental string as untrusted cosmetic input. Do not let remote identity select a record, overwrite GitHub ownership, create a public URL, or grant access.
 
-```json
-{
-  "experimentalProfile": {
-    "source": "codex-private-profile",
-    "displayName": "Example Name",
-    "username": "example",
-    "avatarUrl": "https://example.invalid/avatar-source",
-    "observedAt": "2026-07-11T00:00:00.000Z"
-  }
-}
-```
+Activity insight storage requires a separate downstream opt-in and privacy policy. Explain whether fast-mode percentage, reasoning effort, skill counts, thread counts, and top invocation names will be retained or made public. If that opt-in is absent, discard `activityInsights` after rendering or reject the experimental submission according to a documented policy.
 
-This envelope is not part of the Account Usage Contract. GitHub identity should remain the default display source and the only account binding unless a later, separately reviewed design establishes another verifiable identity source.
+Treat `profile.avatarUrl` as an untrusted remote source. Apply an HTTPS host allowlist, redirect and response-size limits, content-type verification, full image decoding, safe re-encoding, and downstream re-hosting before storage or rendering. Never expose the submitted source URL directly to viewers.
 
-Keep the experimental envelope authenticated and non-public. Treat `avatarUrl` as untrusted adapter input and replace it with a sanitized downstream asset before rendering or storage.
+Handle envelope status explicitly:
+
+| Status | Downstream behavior |
+|---|---|
+| `ok` | Validate every category, then apply the experimental identity/activity policy. |
+| `partial` | Preserve nested official usage; render or store only non-null fields allowed by policy. |
+| `unavailable` | Accept nested official usage only if the endpoint and product policy allow it; profile and activity are `null`. |
+
+Keep the experimental envelope authenticated and non-public by default. Validate it against [`experimental-full-profile.schema.json`](experimental-full-profile.schema.json), preserve null/empty semantics, and isolate stored records by `fullProfileContractVersion` rather than treating it as `contractVersion` 1.
 
 ## Versioning
 

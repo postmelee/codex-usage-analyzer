@@ -370,11 +370,10 @@ function normalizeRequiredString(value, maxLength) {
 }
 
 function normalizePercentage(value) {
-  const normalized = normalizeRequiredInteger(value);
-  if (!normalized.valid || normalized.value > 100) {
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
     return { valid: false, value: null };
   }
-  return normalized;
+  return { valid: true, value: Math.round(value) };
 }
 
 function normalizeNullableInteger(value) {

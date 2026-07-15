@@ -119,6 +119,14 @@ function checkPackageMetadata(context) {
     throw new Error("test_script_missing");
   }
 
+  const runtimeDependencies = packageJson.dependencies ?? {};
+  if (!runtimeDependencies
+    || typeof runtimeDependencies !== "object"
+    || Array.isArray(runtimeDependencies)
+    || Object.keys(runtimeDependencies).length > 0) {
+    throw new Error("runtime_dependencies_present");
+  }
+
   context.packageJson = packageJson;
   context.packageVersion = packageJson.version;
 
@@ -229,11 +237,16 @@ function checkPackDryRun(context) {
     "docs/account-usage-contract.md",
     "docs/account-usage.schema.json",
     "docs/downstream-integration.md",
+    "docs/experimental-full-profile.md",
+    "docs/experimental-full-profile.schema.json",
     "src/account-usage.js",
     "src/app-server-client.js",
     "src/cli.js",
     "src/errors.js",
+    "src/experimental-profile-client.js",
+    "src/experimental-profile.js",
     "src/format-account-usage.js",
+    "src/format-experimental-profile.js",
     "src/index.js",
     "src/index.d.ts"
   ];
@@ -251,6 +264,26 @@ function checkPackDryRun(context) {
 
   if (forbiddenPath) {
     throw new Error(`pack_forbidden_${forbiddenPath.path.replaceAll("/", "_")}`);
+  }
+
+  const forbiddenFragments = [
+    "codex-extracted",
+    "fixture",
+    "auth.json",
+    "auth-response",
+    "profile-response",
+    "raw-response",
+    ".env"
+  ];
+  const forbiddenArtifact = packageInfo.files.find((file) => {
+    const path = file.path.toLowerCase();
+    return forbiddenFragments.some((fragment) => path.includes(fragment));
+  });
+
+  if (forbiddenArtifact) {
+    throw new Error(
+      `pack_forbidden_artifact_${forbiddenArtifact.path.replaceAll("/", "_")}`
+    );
   }
 
   const removedRuntimePaths = [
@@ -371,6 +404,12 @@ function checkSensitivePatterns() {
     "docs/account-usage-contract.md",
     "docs/account-usage.schema.json",
     "docs/downstream-integration.md",
+    "docs/experimental-full-profile.md",
+    "docs/experimental-full-profile.schema.json",
+    "src/cli.js",
+    "src/experimental-profile-client.js",
+    "src/experimental-profile.js",
+    "src/format-experimental-profile.js",
     ".github/workflows/ci.yml",
     ".github/workflows/publish.yml",
     "scripts/release-preflight.js",
