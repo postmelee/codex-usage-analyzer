@@ -1,5 +1,5 @@
 export declare const PACKAGE_NAME: "codex-usage-analyzer";
-export declare const PACKAGE_VERSION: "0.3.0";
+export declare const PACKAGE_VERSION: "0.4.0";
 export declare const ACCOUNT_USAGE_CONTRACT_VERSION: 1;
 export declare const ACCOUNT_USAGE_SUMMARY_FIELDS: readonly [
   "lifetimeTokens",

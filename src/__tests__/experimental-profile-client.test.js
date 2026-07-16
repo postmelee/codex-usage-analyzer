@@ -48,7 +48,7 @@ test("uses one isolated app-server session and one fixed profile request", async
         clientInfo: {
           name: "codex_usage_analyzer",
           title: "Codex Usage Analyzer",
-          version: "0.3.0"
+          version: "0.4.0"
         }
       }
     },
@@ -78,7 +78,7 @@ test("uses one isolated app-server session and one fixed profile request", async
   assert.equal(fetchCall.options.headers.originator, "codex-usage-analyzer");
   assert.equal(
     fetchCall.options.headers["User-Agent"],
-    "codex-usage-analyzer/0.3.0"
+    "codex-usage-analyzer/0.4.0"
   );
   assert.equal(fetchCall.options.signal instanceof AbortSignal, true);
   assert.equal(child.killed, true);
