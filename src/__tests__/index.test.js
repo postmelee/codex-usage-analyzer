@@ -19,7 +19,7 @@ test("exports only the public account usage SDK surface", () => {
     "runCli"
   ].sort());
   assert.equal(sdk.PACKAGE_NAME, "codex-usage-analyzer");
-  assert.equal(sdk.PACKAGE_VERSION, "0.3.0");
+  assert.equal(sdk.PACKAGE_VERSION, "0.4.0");
   assert.equal(sdk.ACCOUNT_USAGE_CONTRACT_VERSION, 1);
   assert.equal(typeof sdk.readAccountUsage, "function");
 });

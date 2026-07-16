@@ -21,7 +21,7 @@ const INITIALIZE_REQUEST_ID = 0;
 const ACCOUNT_USAGE_REQUEST_ID = 1;
 const ACCOUNT_READ_REQUEST_ID = 2;
 const AUTH_STATUS_REQUEST_ID = 3;
-const CLIENT_VERSION = "0.3.0";
+const CLIENT_VERSION = "0.4.0";
 const ACCOUNT_CLAIM = "https://api.openai.com/auth";
 
 export async function readExperimentalProfile(options = {}) {
