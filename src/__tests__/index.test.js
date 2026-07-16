@@ -24,7 +24,7 @@ test("exports only the public account usage SDK surface", () => {
   assert.equal(typeof sdk.readAccountUsage, "function");
 });
 
-test("keeps package metadata and artifact allowlist aligned with the SDK", () => {
+test("keeps package metadata and artifact allowlist aligned with the CLI and SDK", () => {
   const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
 
   assert.equal(packageJson.name, sdk.PACKAGE_NAME);
@@ -36,6 +36,7 @@ test("keeps package metadata and artifact allowlist aligned with the SDK", () =>
       import: "./src/index.js"
     }
   });
+  assert.deepEqual(packageJson.dependencies ?? {}, {});
 
   const paths = new Set(packageJson.files);
   for (const required of [
@@ -45,7 +46,10 @@ test("keeps package metadata and artifact allowlist aligned with the SDK", () =>
     "src/app-server-client.js",
     "src/cli.js",
     "src/errors.js",
+    "src/experimental-profile-client.js",
+    "src/experimental-profile.js",
     "src/format-account-usage.js",
+    "src/format-experimental-profile.js",
     "src/index.d.ts",
     "src/index.js"
   ]) {

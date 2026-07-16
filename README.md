@@ -65,6 +65,36 @@ npx codex-usage-analyzer@latest --json
 }
 ```
 
+## Experimental profile
+
+The default command and `--json` continue to use the documented
+[`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+method and remain identity-free. A separate explicit command can also request the
+profile and activity fields shown by Codex:
+
+```bash
+npx codex-usage-analyzer@latest profile
+npx codex-usage-analyzer@latest profile --json
+```
+
+> **Experimental and unsupported:** `profile` uses the private
+> `/wham/profiles/me` endpoint. It can change or stop working without notice.
+> The command prints a warning to stderr and may emit a display name, username,
+> avatar URL, plan type, activity insights, and top invocation names.
+
+The command starts a dedicated app-server session, reads canonical usage through
+`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
+and performs one fixed HTTPS request. The bearer token and account context stay in
+process memory for that request; the CLI does not directly read authentication
+files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
+
+There is no retry, alternate endpoint, Desktop-client impersonation, or silent
+fallback from the default command. `profile --json` returns a separate Full
+Profile Envelope rather than extending the stable Account Usage Contract or SDK.
+See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
+and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
+it or making identity and activity public.
+
 ## Why this CLI
 
 - **Account-level source:** use the same app-server method intended for Codex account usage instead of estimating from retained local files.
@@ -112,7 +142,8 @@ codex-usage-analyzer - Read your Codex account usage
 
 Usage:
   codex-usage-analyzer [usage] [--json]
-  codex-usage-analyzer [usage] --help
+  codex-usage-analyzer profile [--json]  (experimental)
+  codex-usage-analyzer [usage|profile] --help
   codex-usage-analyzer --version
 ```
 
@@ -122,10 +153,12 @@ Usage:
 | `codex-usage-analyzer usage` | Same human-readable output |
 | `codex-usage-analyzer --json` | Account Usage Contract JSON |
 | `codex-usage-analyzer usage --json` | Same JSON output |
+| `codex-usage-analyzer profile` | Experimental human-readable profile and token activity |
+| `codex-usage-analyzer profile --json` | Experimental Full Profile Envelope JSON |
 | `codex-usage-analyzer --help` | Help without starting app-server |
 | `codex-usage-analyzer --version` | Package version without starting app-server |
 
-Successful output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr.
+Command output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr. The experimental profile warning is always written to stderr, including successful profile calls. An unavailable private profile still emits an envelope and exits with status `1`; canonical usage remains nested when the official read succeeded.
 
 ## SDK
 
@@ -158,13 +191,15 @@ The SDK returns the same document as CLI `--json`. See the [Account Usage Contra
 6. Allowlist and validate the supported fields.
 7. Stop the child process and return the normalized document.
 
-The package has no direct credential reader and no private profile endpoint fallback. Authentication and service communication remain inside the selected Codex process.
+The default path has no direct credential reader and no private profile endpoint fallback. Authentication and service communication remain inside the selected Codex process. The explicit experimental `profile` command uses the separate, bounded flow described above and never activates automatically.
 
 ## Downstream integrations
 
 Profile sites, README cards, and other services can accept the identity-free JSON contract and combine it with identity they manage separately. The [Downstream Integration Guide](docs/downstream-integration.md) defines recommended field names, ownership, submit-token, validation, rendering, caching, and deletion boundaries.
 
 Do not add identity fields to the account usage document. A downstream service should resolve GitHub identity from its own authenticated account binding, not trust a display name or avatar submitted by this CLI.
+
+Downstreams that explicitly accept the Full Profile Envelope must keep GitHub identity as the ownership proof, treat remote profile identity as cosmetic untrusted input, and opt in separately before storing activity insights.
 
 ## Privacy and Security
 
@@ -176,6 +211,8 @@ The default CLI does not directly read or emit:
 - local filesystem paths, raw RPC responses, or raw app-server stderr
 
 Treat account usage as private data even though the contract excludes identity. Review a downstream service's retention and visibility policy before submitting output anywhere.
+
+The experimental `profile` command has a different privacy boundary: it can emit identity, an avatar source URL, plan information, activity insights, and invocation names. Inspect its JSON and the downstream privacy policy before storing, publishing, or submitting it.
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md).
 
