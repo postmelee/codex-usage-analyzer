@@ -65,35 +65,11 @@ npx codex-usage-analyzer@latest --json
 }
 ```
 
-## Experimental profile
-
-The default command and `--json` continue to use the documented
-[`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
-method and remain identity-free. A separate explicit command can also request the
-profile and activity fields shown by Codex:
-
-```bash
-npx codex-usage-analyzer@latest profile
-npx codex-usage-analyzer@latest profile --json
-```
-
-> **Experimental and unsupported:** `profile` uses the private
-> `/wham/profiles/me` endpoint. It can change or stop working without notice.
-> The command prints a warning to stderr and may emit a display name, username,
-> avatar URL, plan type, activity insights, and top invocation names.
-
-The command starts a dedicated app-server session, reads canonical usage through
-`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
-and performs one fixed HTTPS request. The bearer token and account context stay in
-process memory for that request; the CLI does not directly read authentication
-files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
-
-There is no retry, alternate endpoint, Desktop-client impersonation, or silent
-fallback from the default command. `profile --json` returns a separate Full
-Profile Envelope rather than extending the stable Account Usage Contract or SDK.
-See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
-and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
-it or making identity and activity public.
+> **Experimental profile:** The `profile` option adds identity, a 52-week token
+> activity map, activity insights, and top invocations (most-used skills and
+> plugins with usage counts). It uses an unsupported private endpoint and may
+> expose private data.
+> [Learn more about the experimental profile.](#experimental-profile)
 
 ## Why this CLI
 
@@ -159,6 +135,36 @@ Usage:
 | `codex-usage-analyzer --version` | Package version without starting app-server |
 
 Command output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr. The experimental profile warning is always written to stderr, including successful profile calls. An unavailable private profile still emits an envelope and exits with status `1`; canonical usage remains nested when the official read succeeded.
+
+## Experimental profile
+
+The default command and `--json` continue to use the documented
+[`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+method and remain identity-free. A separate explicit command can also request the
+profile and activity fields shown by Codex:
+
+```bash
+npx codex-usage-analyzer@latest profile
+npx codex-usage-analyzer@latest profile --json
+```
+
+> **Experimental and unsupported:** `profile` uses the private
+> `/wham/profiles/me` endpoint. It can change or stop working without notice.
+> The command prints a warning to stderr and may emit a display name, username,
+> avatar URL, plan type, activity insights, and top invocation names.
+
+The command starts a dedicated app-server session, reads canonical usage through
+`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
+and performs one fixed HTTPS request. The bearer token and account context stay in
+process memory for that request; the CLI does not directly read authentication
+files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
+
+There is no retry, alternate endpoint, Desktop-client impersonation, or silent
+fallback from the default command. `profile --json` returns a separate Full
+Profile Envelope rather than extending the stable Account Usage Contract or SDK.
+See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
+and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
+it or making identity and activity public.
 
 ## SDK
 
