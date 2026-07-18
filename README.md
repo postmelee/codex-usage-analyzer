@@ -136,36 +136,6 @@ Usage:
 
 Command output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr. The experimental profile warning is always written to stderr, including successful profile calls. An unavailable private profile still emits an envelope and exits with status `1`; canonical usage remains nested when the official read succeeded.
 
-## Experimental profile
-
-The default command and `--json` continue to use the documented
-[`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
-method and remain identity-free. A separate explicit command can also request the
-profile and activity fields shown by Codex:
-
-```bash
-npx codex-usage-analyzer@latest profile
-npx codex-usage-analyzer@latest profile --json
-```
-
-> **Experimental and unsupported:** `profile` uses the private
-> `/wham/profiles/me` endpoint. It can change or stop working without notice.
-> The command prints a warning to stderr and may emit a display name, username,
-> avatar URL, plan type, activity insights, and top invocation names.
-
-The command starts a dedicated app-server session, reads canonical usage through
-`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
-and performs one fixed HTTPS request. The bearer token and account context stay in
-process memory for that request; the CLI does not directly read authentication
-files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
-
-There is no retry, alternate endpoint, Desktop-client impersonation, or silent
-fallback from the default command. `profile --json` returns a separate Full
-Profile Envelope rather than extending the stable Account Usage Contract or SDK.
-See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
-and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
-it or making identity and activity public.
-
 ## SDK
 
 ```js
@@ -221,6 +191,149 @@ Treat account usage as private data even though the contract excludes identity. 
 The experimental `profile` command has a different privacy boundary: it can emit identity, an avatar source URL, plan information, activity insights, and invocation names. Inspect its JSON and the downstream privacy policy before storing, publishing, or submitting it.
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md).
+
+## Experimental profile
+
+The default command and `--json` continue to use the documented
+[`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+method and remain identity-free. The explicit experimental `profile` option
+includes the same canonical usage and adds:
+
+- **Profile:** display name, username, avatar information, and plan type
+- **Token activity:** a 52-week map derived from canonical daily usage
+- **Activity insights:** fast mode share, reasoning effort, skills explored,
+  total skill uses, and total threads
+- **Top invocations:** most-used skills and plugins with usage counts
+
+> **Experimental and unsupported:** `profile` uses the private
+> `/wham/profiles/me` endpoint. It can change or stop working without notice.
+> The command prints a warning to stderr and may emit account identity and
+> private activity information.
+
+Human-readable output:
+
+```bash
+npx codex-usage-analyzer@latest profile
+```
+
+```text
+Codex profile (experimental)
+Status  ok
+
+Profile
+Display name  Example Name
+Username      @example-user
+Avatar        Available
+Plan          example-plan
+
+Usage
+Codex account usage
+
+Lifetime tokens    1.23B
+Peak daily tokens  45.6M
+Longest turn       12m 34s
+Current streak     3 days
+Longest streak     21 days
+Daily buckets      1 day
+
+Captured at 2026-07-11T00:00:00.000Z
+
+Token activity
+Sun  |....................................................|
+Mon  |....................................................|
+Tue  |....................................................|
+Wed  |....................................................|
+Thu  |....................................................|
+Fri  |...................................................#|
+Sat  |....................................................|
+Legend  . 0  : 1  * 2  O 3  # 4
+
+Activity insights
+Fast mode         25%
+Reasoning effort  high (50%)
+Skills explored   6
+Total skill uses  42
+Total threads     128
+
+Top invocations
+$example-skill   9
+@example-plugin  4
+```
+
+For machine-readable output:
+
+```bash
+npx codex-usage-analyzer@latest profile --json
+```
+
+```json
+{
+  "fullProfileContractVersion": 1,
+  "kind": "codex-usage-analyzer.fullProfile",
+  "stability": "experimental",
+  "status": "ok",
+  "usage": {
+    "contractVersion": 1,
+    "capturedAt": "2026-07-11T00:00:00.000Z",
+    "summary": {
+      "lifetimeTokens": 1234567890,
+      "peakDailyTokens": 45600000,
+      "longestRunningTurnSec": 754,
+      "currentStreakDays": 3,
+      "longestStreakDays": 21
+    },
+    "dailyUsageBuckets": [
+      {
+        "startDate": "2026-07-10",
+        "tokens": 123456
+      }
+    ]
+  },
+  "profile": {
+    "displayName": "Example Name",
+    "username": "example-user",
+    "avatarUrl": "https://example.invalid/avatar.png",
+    "planType": "example-plan"
+  },
+  "activityInsights": {
+    "fastModePercent": 25,
+    "reasoningEffort": "high",
+    "reasoningEffortPercent": 50,
+    "skillsExplored": 6,
+    "totalSkillsUsed": 42,
+    "totalThreads": 128,
+    "topInvocations": [
+      {
+        "type": "skill",
+        "name": "example-skill",
+        "usageCount": 9
+      },
+      {
+        "type": "plugin",
+        "name": "example-plugin",
+        "usageCount": 4
+      }
+    ]
+  }
+}
+```
+
+All values above are synthetic. They do not identify or describe a real account.
+The human-readable output suppresses the avatar URL, while JSON consumers receive
+the validated source URL and must treat it as untrusted remote input.
+
+The command starts a dedicated app-server session, reads canonical usage through
+`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
+and performs one fixed HTTPS request. The bearer token and account context stay in
+process memory for that request; the CLI does not directly read authentication
+files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
+
+There is no retry, alternate endpoint, Desktop-client impersonation, or silent
+fallback from the default command. `profile --json` returns a separate Full
+Profile Envelope rather than extending the stable Account Usage Contract or SDK.
+See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
+and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
+it or making identity and activity public.
 
 ## Troubleshooting
 
