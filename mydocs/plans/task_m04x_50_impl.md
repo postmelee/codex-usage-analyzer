@@ -209,7 +209,7 @@ node bin/codex-usage-analyzer.js --version
 node bin/codex-usage-analyzer.js profile --help
 test ! -e package-lock.json
 git diff --exit-code origin/main -- package.json bin README.md docs CONTRIBUTING.md SECURITY.md mydocs/manual/npm_release_guide.md src/account-usage.js src/app-server-client.js src/cli.js src/errors.js src/experimental-profile-client.js src/experimental-profile.js src/format-account-usage.js src/format-experimental-profile.js src/index.js src/index.d.ts
-if git diff --name-only origin/main...HEAD | rg -v '^(\.github/workflows/(ci|publish)\.yml|scripts/release-(preflight|workflow-policy)\.js|src/__tests__/release-workflow-policy\.test\.js|mydocs/)$'; then exit 1; fi
+if git diff --name-only origin/main...HEAD | rg -v '^(\.github/workflows/(ci|publish)\.yml|scripts/release-(preflight|workflow-policy)\.js|src/__tests__/release-workflow-policy\.test\.js|mydocs/.*)$'; then exit 1; fi
 git diff --check
 git status --short
 rm -rf "$CACHE_DIR"
