@@ -4,6 +4,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  assertCiWorkflowPolicy,
+  assertPublishWorkflowPolicy
+} from "./release-workflow-policy.js";
+
 const packageName = "codex-usage-analyzer";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = parseArgs(process.argv.slice(2));
@@ -313,6 +318,7 @@ function checkPackDryRun(context) {
 
 function checkPublishWorkflow() {
   const workflow = readTextFile(".github/workflows/publish.yml");
+  assertPublishWorkflowPolicy(workflow);
   const requiredText = [
     "workflow_dispatch:",
     "contents: read",
@@ -337,11 +343,12 @@ function checkPublishWorkflow() {
     throw new Error(`workflow_forbidden_${sanitizeId(forbidden)}`);
   }
 
-  return { detail: "trusted publishing workflow checks passed" };
+  return { detail: "trusted publishing workflow and policy checks passed" };
 }
 
 function checkCiWorkflow() {
   const workflow = readTextFile(".github/workflows/ci.yml");
+  assertCiWorkflowPolicy(workflow);
   const requiredText = [
     "node-version: 20",
     "run: npm test",
@@ -357,7 +364,7 @@ function checkCiWorkflow() {
     }
   }
 
-  return { detail: "Node 20 and no-auth smoke checks passed" };
+  return { detail: "Node 20, no-auth smoke, and workflow policy checks passed" };
 }
 
 function checkReleaseGuide() {
@@ -413,6 +420,7 @@ function checkSensitivePatterns() {
     ".github/workflows/ci.yml",
     ".github/workflows/publish.yml",
     "scripts/release-preflight.js",
+    "scripts/release-workflow-policy.js",
     "mydocs/manual/npm_release_guide.md"
   ];
   const patterns = [
