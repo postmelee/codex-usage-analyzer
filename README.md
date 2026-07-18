@@ -65,11 +65,11 @@ npx codex-usage-analyzer@latest --json
 }
 ```
 
-> **Experimental profile:** The `profile` option adds identity, a 52-week token
-> activity map, activity insights, and top invocations (most-used skills and
-> plugins with usage counts). It uses an unsupported private endpoint and may
-> expose private data.
-> [Learn more about the experimental profile.](#experimental-profile)
+> **Experimental: `profile` command.** It adds identity, a 52-week token activity
+> map, activity insights, and top invocations (most-used skills and plugins with
+> usage counts). It uses an unsupported private endpoint and may expose private
+> data.
+> [Learn more about the experimental `profile` command.](#experimental-profile-command)
 
 ## Why this CLI
 
@@ -192,11 +192,11 @@ The experimental `profile` command has a different privacy boundary: it can emit
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md).
 
-## Experimental profile
+## Experimental: `profile` command
 
 The default command and `--json` continue to use the documented
 [`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
-method and remain identity-free. The explicit experimental `profile` option
+method and remain identity-free. The explicit experimental `profile` command
 includes the same canonical usage and adds:
 
 - **Profile:** display name, username, avatar information, and plan type
@@ -330,22 +330,25 @@ npx codex-usage-analyzer@latest profile --json
 }
 ```
 
-All values above are synthetic. They do not identify or describe a real account.
-The human-readable output suppresses the avatar URL, while JSON consumers receive
-the validated source URL and must treat it as untrusted remote input.
+> The examples above use synthetic values. An actual `profile` command returns
+> the data available to the currently signed-in Codex account.
 
-The command starts a dedicated app-server session, reads canonical usage through
-`account/usage/read`, obtains the minimum ChatGPT auth context from that process,
-and performs one fixed HTTPS request. The bearer token and account context stay in
-process memory for that request; the CLI does not directly read authentication
-files, cookies, or keychains. JavaScript cannot guarantee memory zeroization.
+Key limitations:
 
-There is no retry, alternate endpoint, Desktop-client impersonation, or silent
-fallback from the default command. `profile --json` returns a separate Full
-Profile Envelope rather than extending the stable Account Usage Contract or SDK.
+- Human-readable output reports the avatar only as `Available` or `Unavailable`;
+  JSON includes the validated source URL, which consumers must treat as untrusted.
+- The experiment makes one fixed request to an unsupported private endpoint,
+  without retries, alternate endpoints, Desktop-client impersonation, or fallback
+  from the default command.
+- Authentication context remains in process memory for the request. The CLI does
+  not directly read authentication files, cookies, or keychains, and JavaScript
+  cannot guarantee memory zeroization.
+- `profile --json` returns a separate experimental Full Profile Envelope; it does
+  not extend the stable Account Usage Contract or public SDK.
+
 See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
-and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating
-it or making identity and activity public.
+and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating,
+storing, or publishing this output.
 
 ## Troubleshooting
 
