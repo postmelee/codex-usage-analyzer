@@ -29,6 +29,91 @@ export interface AccountUsageDocument {
   dailyUsageBuckets: AccountUsageDailyBucket[] | null;
 }
 
+export type ExperimentalFullProfileStatus =
+  | "ok"
+  | "partial"
+  | "unavailable";
+
+export interface ExperimentalFullProfileProfile {
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  planType: string | null;
+}
+
+export interface ExperimentalFullProfileInvocation {
+  type: "plugin" | "skill";
+  name: string;
+  usageCount: number;
+}
+
+export interface ExperimentalFullProfileActivityInsights {
+  fastModePercent: number | null;
+  reasoningEffort: string | null;
+  reasoningEffortPercent: number | null;
+  skillsExplored: number | null;
+  totalSkillsUsed: number | null;
+  totalThreads: number | null;
+  topInvocations: ExperimentalFullProfileInvocation[] | null;
+}
+
+export interface ExperimentalFullProfileV1 {
+  fullProfileContractVersion: 1;
+  kind: "codex-usage-analyzer.fullProfile";
+  stability: "experimental";
+  status: ExperimentalFullProfileStatus;
+  usage: AccountUsageDocument;
+  profile: ExperimentalFullProfileProfile | null;
+  activityInsights: ExperimentalFullProfileActivityInsights | null;
+}
+
+export type ExperimentalPetReason =
+  | "selected_pet_state_unavailable"
+  | "selected_pet_not_custom"
+  | "selected_pet_manifest_unavailable"
+  | "selected_pet_image_unavailable"
+  | "selected_pet_image_invalid"
+  | "selected_pet_image_too_large";
+
+export interface ExperimentalPetImage {
+  role: "spritesheet";
+  contentType: "image/webp" | "image/png";
+  width: number;
+  height: number;
+  byteLength: number;
+  sha256: string;
+  base64: string;
+}
+
+export interface ExperimentalPetAvailable {
+  status: "ok";
+  reason: null;
+  kind: "custom";
+  image: ExperimentalPetImage;
+}
+
+export interface ExperimentalPetUnavailable {
+  status: "unavailable";
+  reason: ExperimentalPetReason;
+  kind: null;
+  image: null;
+}
+
+export type ExperimentalPet =
+  | ExperimentalPetAvailable
+  | ExperimentalPetUnavailable;
+
+export interface ExperimentalFullProfileV2 {
+  fullProfileContractVersion: 2;
+  kind: "codex-usage-analyzer.fullProfile";
+  stability: "experimental";
+  status: ExperimentalFullProfileStatus;
+  usage: AccountUsageDocument;
+  profile: ExperimentalFullProfileProfile | null;
+  activityInsights: ExperimentalFullProfileActivityInsights | null;
+  pet: ExperimentalPet;
+}
+
 export interface ReadAccountUsageOptions {
   timeoutMs?: number;
 }
