@@ -193,7 +193,7 @@ export async function requestAccountUsageFromAppServer(options = {}) {
         clientInfo: {
           name: "codex_usage_analyzer",
           title: "Codex Usage Analyzer",
-          version: "0.4.0"
+          version: "0.4.1"
         }
       }
     });
