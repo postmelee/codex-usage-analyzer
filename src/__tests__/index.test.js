@@ -4,6 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import * as sdk from "../index.js";
+import * as experimentalProfileSdk from "../experimental-profile-api.js";
 
 const packagePath = fileURLToPath(new URL("../../package.json", import.meta.url));
 
@@ -24,6 +25,15 @@ test("exports only the public account usage SDK surface", () => {
   assert.equal(typeof sdk.readAccountUsage, "function");
 });
 
+test("exports the experimental profile surface only from its subpath", () => {
+  assert.deepEqual(Object.keys(experimentalProfileSdk).sort(), [
+    "listExperimentalPets",
+    "readExperimentalProfile"
+  ]);
+  assert.equal(typeof experimentalProfileSdk.listExperimentalPets, "function");
+  assert.equal(typeof experimentalProfileSdk.readExperimentalProfile, "function");
+});
+
 test("keeps package metadata and artifact allowlist aligned with the CLI and SDK", () => {
   const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
 
@@ -34,6 +44,10 @@ test("keeps package metadata and artifact allowlist aligned with the CLI and SDK
     ".": {
       types: "./src/index.d.ts",
       import: "./src/index.js"
+    },
+    "./experimental-profile": {
+      types: "./src/experimental-profile-api.d.ts",
+      import: "./src/experimental-profile-api.js"
     }
   });
   assert.deepEqual(packageJson.dependencies ?? {}, {});
@@ -46,6 +60,10 @@ test("keeps package metadata and artifact allowlist aligned with the CLI and SDK
     "src/app-server-client.js",
     "src/cli.js",
     "src/errors.js",
+    "src/experimental-pet.js",
+    "src/experimental-pet-selector.js",
+    "src/experimental-profile-api.d.ts",
+    "src/experimental-profile-api.js",
     "src/experimental-profile-client.js",
     "src/experimental-profile.js",
     "src/format-account-usage.js",

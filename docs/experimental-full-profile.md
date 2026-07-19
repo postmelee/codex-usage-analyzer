@@ -1,21 +1,26 @@
 # Experimental Full Profile Contract
 
-The Full Profile Envelope is an opt-in, CLI-only contract for identity and
+The Full Profile Envelope is an opt-in CLI and module contract for identity and
 activity fields shown by Codex. It combines one stable, identity-free Account
 Usage Contract document with allowlisted fields from an unsupported private
-profile endpoint.
+profile endpoint. Full Profile v2 can additionally carry one explicitly opted-in
+local custom Codex pet.
 
-This contract is experimental. It is not part of the public JavaScript SDK and
+This contract is experimental. It is isolated from the root JavaScript SDK and
 does not change the default command or the stable
 [`account/usage/read`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
-path. The machine-readable source of truth is
-[`experimental-full-profile.schema.json`](experimental-full-profile.schema.json).
+path. The machine-readable sources of truth are the
+[v1 schema](experimental-full-profile.schema.json) and
+[v2 schema](experimental-full-profile-v2.schema.json).
 
 ## CLI
 
 ```bash
 codex-usage-analyzer profile
 codex-usage-analyzer profile --json
+codex-usage-analyzer profile --json --include-pet
+codex-usage-analyzer profile --include-pet --pet-key 2
+codex-usage-analyzer profile --include-pet --select-pet
 ```
 
 `profile` prints a human-readable view. `profile --json` prints exactly one Full
@@ -25,11 +30,34 @@ Profile Envelope to stdout. Both commands first write this warning to stderr:
 codex-usage-analyzer: Warning: profile uses an unsupported experimental endpoint and may expose account identity fields.
 ```
 
+`--include-pet` is a second, independent opt-in and writes another warning:
+
+```text
+codex-usage-analyzer: Warning: --include-pet reads local custom pet metadata and image bytes.
+```
+
+Pet options are order-independent. `--pet-key` accepts one positive safe integer;
+`--pet-key` and `--select-pet` are mutually exclusive and valid only with
+`--include-pet`. Invalid combinations fail before app-server, profile, catalog,
+or pet-file access.
+
+Selection follows this order:
+
+1. `--pet-key N` reads catalog key `N`.
+2. `--select-pet` forces an arrow-key selector and requires stdin and stderr TTYs.
+3. Otherwise, the custom pet selected in Codex Desktop is preferred.
+4. If that selection is unavailable, interactive human output offers the selector.
+
+Default JSON output never prompts. Cancellation, an invalid key, an empty catalog,
+or selection failure returns `selected_pet_selection_unavailable`; no first or
+only catalog entry is selected implicitly. Catalog keys are deterministic and
+one-based for a catalog snapshot, but are not persistent pet identifiers.
+
 `profile --help` and `profile -h` do not start app-server or make a network
 request. There is no environment variable, configuration file, implicit mode,
 or fallback that enables the experiment without the `profile` command token.
 
-## Envelope
+## Full Profile v1 envelope
 
 ```json
 {
@@ -81,7 +109,7 @@ or fallback that enables the experiment without the `profile` command token.
 All values are synthetic. They do not identify or describe a real account.
 Every object rejects unknown fields under the JSON Schema.
 
-## Root fields
+## Full Profile v1 root fields
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -92,6 +120,94 @@ Every object rejects unknown fields under the JSON Schema.
 | `usage` | Account Usage Contract v1 | Canonical usage from official app-server data |
 | `profile` | object or `null` | Allowlisted identity and plan projection |
 | `activityInsights` | object or `null` | Allowlisted private activity projection |
+
+## Full Profile v2 pet extension
+
+When pet inclusion is requested, the envelope version is `2` and the required
+root `pet` field is added. All v1 fields retain their meanings.
+
+```json
+{
+  "fullProfileContractVersion": 2,
+  "kind": "codex-usage-analyzer.fullProfile",
+  "stability": "experimental",
+  "status": "partial",
+  "usage": {
+    "contractVersion": 1,
+    "capturedAt": "2026-01-01T00:00:00.000Z",
+    "summary": {
+      "lifetimeTokens": 1000,
+      "peakDailyTokens": 200,
+      "longestRunningTurnSec": 300,
+      "currentStreakDays": 4,
+      "longestStreakDays": 5
+    },
+    "dailyUsageBuckets": []
+  },
+  "profile": null,
+  "activityInsights": null,
+  "pet": {
+    "status": "ok",
+    "reason": null,
+    "kind": "custom",
+    "image": {
+      "role": "spritesheet",
+      "contentType": "image/png",
+      "width": 1,
+      "height": 1,
+      "byteLength": 68,
+      "sha256": "431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460",
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    }
+  }
+}
+```
+
+All values are synthetic. For an available pet, `image` contains the complete
+spritesheet bytes encoded as strict base64 plus validated content type,
+dimensions, byte length, and lowercase SHA-256. `role` is always `spritesheet`
+and `kind` is always `custom`. The human renderer prints only status, kind,
+content type, dimensions, and byte length; it never prints base64 or the digest.
+
+An unavailable pet has `status: "unavailable"`, `kind: null`, and `image: null`.
+Its `reason` is one of:
+
+- `selected_pet_state_unavailable`
+- `selected_pet_not_custom`
+- `selected_pet_selection_unavailable`
+- `selected_pet_manifest_unavailable`
+- `selected_pet_image_unavailable`
+- `selected_pet_image_invalid`
+- `selected_pet_image_too_large`
+
+The v2 root status combines remote profile and pet availability: both available
+is `ok`, both unavailable is `unavailable`, and every mixed case is `partial`.
+The CLI exits `1` only when the combined root status is `unavailable`.
+
+Without pet opt-in, the reader does not access the pet state, catalog, manifest,
+or image and continues to emit Full Profile v1.
+
+## Module API
+
+```js
+import {
+  listExperimentalPets,
+  readExperimentalProfile
+} from "codex-usage-analyzer/experimental-profile";
+
+const catalog = await listExperimentalPets();
+const profile = await readExperimentalProfile({
+  includePet: true,
+  selectPet(items) {
+    return items.find((item) => item.selected)?.key ?? null;
+  }
+});
+```
+
+`listExperimentalPets()` returns only `{ key, displayName, selected }` and does
+not read image bytes. `readExperimentalProfile()` returns v1 unless
+`includePet: true` is supplied. Module selection uses a numeric key returned by
+`selectPet`; `forcePetSelection: true` invokes it before Desktop-state lookup.
 
 The envelope has no separate observation timestamp. `usage.capturedAt` is the
 canonical time at which the official usage result was received.
@@ -198,7 +314,7 @@ The profile flow is isolated from the default usage client:
    limit, strict UTF-8, JSON content-type, and object-root validation.
 5. Reconstruct the output from an allowlist and discard raw response categories.
 
-Bearer and account context references exist only in process memory for the
+Bearer-token and account context references exist only in process memory for the
 request. They are never returned, logged, written to a file, or passed to the
 normalizer. JavaScript memory zeroization is not guaranteed, so the implementation
 minimizes reference and child-process lifetime instead of claiming erasure.
@@ -207,6 +323,13 @@ The CLI does not directly read authentication files, cookies, keychains, prompts
 responses, or local sessions. It discards app-server stderr and raw RPC/HTTP error
 details. It uses an honest package originator and User-Agent; it does not imitate
 a Desktop client if the endpoint rejects the request.
+
+Pet opt-in is a separate local-file boundary. The reader uses bounded state,
+manifest, and image reads; rejects unsafe paths, symlinks, unsupported formats,
+invalid dimensions, excessive pixels, and oversized files; and returns only
+normalized fields. It supports PNG and WebP custom-pet spritesheets. It never
+returns local paths or raw parser errors. The base64 value is the complete image
+and must be treated as private binary data.
 
 ## Unsupported endpoint and drift
 
@@ -233,6 +356,9 @@ experimental envelope must:
 - trust only nested official `usage` for canonical metrics
 - apply a separate privacy policy before retaining activity insights or invocation
   names
+- obtain separate consent before retaining or publishing `pet.image.base64`
+- verify strict base64, decoded byte length, SHA-256, dimensions, content type,
+  and a full image decode before safely re-encoding and re-hosting a pet
 - validate, decode, safely re-encode, and re-host an allowed avatar instead of
   exposing the source URL
 - never accept Codex/OpenAI credentials and never log raw profile payloads

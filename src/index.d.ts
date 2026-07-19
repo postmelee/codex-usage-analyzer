@@ -153,10 +153,15 @@ export declare class CodexUsageError extends Error {
 }
 
 export interface CliIo {
+  stdin?: {
+    isTTY?: boolean;
+  };
   stdout?: {
+    isTTY?: boolean;
     write(chunk: string): unknown;
   };
   stderr?: {
+    isTTY?: boolean;
     write(chunk: string): unknown;
   };
 }
