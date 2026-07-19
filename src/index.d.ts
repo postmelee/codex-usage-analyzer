@@ -70,6 +70,7 @@ export interface ExperimentalFullProfileV1 {
 export type ExperimentalPetReason =
   | "selected_pet_state_unavailable"
   | "selected_pet_not_custom"
+  | "selected_pet_selection_unavailable"
   | "selected_pet_manifest_unavailable"
   | "selected_pet_image_unavailable"
   | "selected_pet_image_invalid"
@@ -102,6 +103,12 @@ export interface ExperimentalPetUnavailable {
 export type ExperimentalPet =
   | ExperimentalPetAvailable
   | ExperimentalPetUnavailable;
+
+export interface ExperimentalPetCatalogItem {
+  key: number;
+  displayName: string | null;
+  selected: boolean;
+}
 
 export interface ExperimentalFullProfileV2 {
   fullProfileContractVersion: 2;

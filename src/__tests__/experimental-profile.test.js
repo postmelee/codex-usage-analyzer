@@ -503,21 +503,24 @@ test("normalizes invalid pet values to one safe unavailable shape", () => {
 });
 
 test("preserves only allowlisted unavailable pet reasons", () => {
-  const pet = {
-    ...createUnavailablePet("selected_pet_image_too_large"),
-    unknown: "synthetic-private-pet"
-  };
-  const result = normalizeFullProfileV2Result(
-    createUsage(),
-    null,
-    pet
-  );
+  for (const reason of [
+    "selected_pet_image_too_large",
+    "selected_pet_selection_unavailable"
+  ]) {
+    const pet = {
+      ...createUnavailablePet(reason),
+      unknown: "synthetic-private-pet"
+    };
+    const result = normalizeFullProfileV2Result(
+      createUsage(),
+      null,
+      pet
+    );
 
-  assert.equal(result.status, "unavailable");
-  assert.deepEqual(result.pet, createUnavailablePet(
-    "selected_pet_image_too_large"
-  ));
-  assert.equal(JSON.stringify(result).includes("synthetic-private"), false);
+    assert.equal(result.status, "unavailable");
+    assert.deepEqual(result.pet, createUnavailablePet(reason));
+    assert.equal(JSON.stringify(result).includes("synthetic-private"), false);
+  }
 });
 
 test("keeps the Full Profile v2 schema aligned with runtime contracts", () => {

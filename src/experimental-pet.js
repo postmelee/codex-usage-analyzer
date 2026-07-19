@@ -24,6 +24,7 @@ export const EXPERIMENTAL_PET_STATUSES = Object.freeze([
 export const EXPERIMENTAL_PET_REASONS = Object.freeze([
   "selected_pet_state_unavailable",
   "selected_pet_not_custom",
+  "selected_pet_selection_unavailable",
   "selected_pet_manifest_unavailable",
   "selected_pet_image_unavailable",
   "selected_pet_image_invalid",
@@ -33,6 +34,12 @@ export const EXPERIMENTAL_PET_REASONS = Object.freeze([
 export const EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES = Object.freeze([
   "image/webp",
   "image/png"
+]);
+
+export const EXPERIMENTAL_PET_CATALOG_FIELDS = Object.freeze([
+  "key",
+  "displayName",
+  "selected"
 ]);
 
 export const MAX_EXPERIMENTAL_PET_STATE_BYTES = 1_048_576;
@@ -48,6 +55,7 @@ const CUSTOM_AVATAR_PREFIX = "custom:";
 const PETS_DIRECTORY_NAME = "pets";
 const PET_MANIFEST_NAME = "pet.json";
 const MAX_SELECTED_ID_LENGTH = 256;
+const MAX_DISPLAY_NAME_LENGTH = 128;
 const MAX_SPRITESHEET_PATH_LENGTH = 1_024;
 const PROTOTYPE_SENSITIVE_KEYS = Object.freeze([
   "__proto__",
@@ -61,20 +69,36 @@ const CONTENT_TYPE_BY_EXTENSION = Object.freeze({
 
 export async function readExperimentalPet(options = {}) {
   const codexHome = resolveCodexHome(options);
-  const selected = await readSelectedCustomPet(codexHome);
+  let manifestResult;
 
-  if (selected.reason !== null) {
-    return unavailablePet(selected.reason);
-  }
+  if (Object.hasOwn(options, "petKey")) {
+    if (!isPositiveSafeInteger(options.petKey)) {
+      return unavailablePet("selected_pet_selection_unavailable");
+    }
 
-  const manifestResult = await readSelectedManifest(
-    codexHome,
-    selected.customId
-  );
-  selected.customId = null;
+    const catalog = await readPetCatalog(codexHome, null);
+    const selectedEntry = catalog.find((entry) => entry.key === options.petKey);
+    if (selectedEntry === undefined) {
+      return unavailablePet("selected_pet_selection_unavailable");
+    }
 
-  if (manifestResult.reason !== null) {
-    return unavailablePet(manifestResult.reason);
+    manifestResult = selectedEntry.manifest;
+  } else {
+    const selected = await readSelectedCustomPet(codexHome);
+
+    if (selected.reason !== null) {
+      return unavailablePet(selected.reason);
+    }
+
+    manifestResult = await readSelectedManifest(
+      codexHome,
+      selected.customId
+    );
+    selected.customId = null;
+
+    if (manifestResult.reason !== null) {
+      return unavailablePet(manifestResult.reason);
+    }
   }
 
   const imageResult = await readPetImage(manifestResult);
@@ -91,6 +115,20 @@ export async function readExperimentalPet(options = {}) {
     kind: "custom",
     image: imageResult.image
   };
+}
+
+export async function listExperimentalPets(options = {}) {
+  const codexHome = resolveCodexHome(options);
+  const selected = await readSelectedCustomPet(codexHome);
+  const selectedCustomId = selected.reason === null ? selected.customId : null;
+  const catalog = await readPetCatalog(codexHome, selectedCustomId);
+  selected.customId = null;
+
+  return catalog.map((entry) => ({
+    key: entry.key,
+    displayName: entry.displayName,
+    selected: entry.selected
+  }));
 }
 
 function resolveCodexHome(options) {
@@ -170,6 +208,43 @@ async function readSelectedManifest(codexHome, customId) {
   }
 
   const petDirectory = join(petsDirectory, selectedEntry.name);
+  const manifest = await readCatalogManifest(petDirectory);
+  return manifest ?? manifestFailure();
+}
+
+async function readPetCatalog(codexHome, selectedCustomId) {
+  const petsDirectory = join(codexHome, PETS_DIRECTORY_NAME);
+  let entries;
+
+  try {
+    entries = await readdir(petsDirectory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const directories = entries
+    .filter((entry) => entry.isDirectory())
+    .sort(compareDirectoryEntries);
+  const catalog = [];
+
+  for (const entry of directories) {
+    const manifest = await readCatalogManifest(
+      join(petsDirectory, entry.name)
+    );
+    if (manifest === null) continue;
+
+    catalog.push({
+      key: catalog.length + 1,
+      displayName: manifest.displayName,
+      selected: selectedCustomId !== null && entry.name === selectedCustomId,
+      manifest
+    });
+  }
+
+  return catalog;
+}
+
+async function readCatalogManifest(petDirectory) {
   const manifestResult = await readLimitedJson(
     join(petDirectory, PET_MANIFEST_NAME),
     MAX_EXPERIMENTAL_PET_MANIFEST_BYTES
@@ -178,20 +253,21 @@ async function readSelectedManifest(codexHome, customId) {
   if (!manifestResult.ok
     || !isRecord(manifestResult.value)
     || hasPrototypeSensitiveKey(manifestResult.value)) {
-    return manifestFailure();
+    return null;
   }
 
   const spritesheetPath = normalizeRelativeImagePath(
     manifestResult.value.spritesheetPath
   );
   if (spritesheetPath === null) {
-    return manifestFailure();
+    return null;
   }
 
   return {
     reason: null,
     petDirectory,
-    spritesheetPath
+    spritesheetPath,
+    displayName: normalizeDisplayName(manifestResult.value.displayName)
   };
 }
 
@@ -363,6 +439,25 @@ function normalizeRelativeImagePath(value) {
   return normalizedPath;
 }
 
+function normalizeDisplayName(value) {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (trimmed.length < 1
+    || trimmed.length > MAX_DISPLAY_NAME_LENGTH
+    || hasControlCharacter(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function compareDirectoryEntries(left, right) {
+  if (left.name < right.name) return -1;
+  if (left.name > right.name) return 1;
+  return 0;
+}
+
 function readPngDimensions(bytes) {
   const signature = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
@@ -457,6 +552,10 @@ function hasControlCharacter(value) {
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isPositiveSafeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 1;
 }
 
 function selectedFailure(reason) {

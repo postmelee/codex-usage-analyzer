@@ -329,6 +329,7 @@
               "enum": [
                 "selected_pet_state_unavailable",
                 "selected_pet_not_custom",
+                "selected_pet_selection_unavailable",
                 "selected_pet_manifest_unavailable",
                 "selected_pet_image_unavailable",
                 "selected_pet_image_invalid",
@@ -398,6 +399,7 @@
                 "enum": [
                   "selected_pet_state_unavailable",
                   "selected_pet_not_custom",
+                  "selected_pet_selection_unavailable",
                   "selected_pet_manifest_unavailable",
                   "selected_pet_image_unavailable",
                   "selected_pet_image_invalid",

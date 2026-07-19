@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 
 import {
+  EXPERIMENTAL_PET_CATALOG_FIELDS,
   EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES,
   EXPERIMENTAL_PET_REASONS,
   EXPERIMENTAL_PET_STATUSES,
@@ -22,6 +23,7 @@ import {
   MAX_EXPERIMENTAL_PET_IMAGE_PIXELS,
   MAX_EXPERIMENTAL_PET_MANIFEST_BYTES,
   MAX_EXPERIMENTAL_PET_STATE_BYTES,
+  listExperimentalPets,
   readExperimentalPet
 } from "../experimental-pet.js";
 
@@ -68,6 +70,108 @@ test("reads one selected custom WebP spritesheet with bounded metadata", async (
   assert.equal(serialized.includes(fixture.root), false);
   assert.equal(serialized.includes("file:"), false);
   assert.equal(serialized.includes("data:image"), false);
+});
+
+test("lists multiple custom pets without exposing source identifiers", async (t) => {
+  const fixture = await createCodexHome(t, { image: false });
+  await addPet(fixture.root, {
+    directoryName: "alpha-synthetic-source-id",
+    displayName: "  Alpha Pet  ",
+    image: false
+  });
+  await addPet(fixture.root, {
+    directoryName: "beta-synthetic-source-id",
+    displayName: "Alpha Pet",
+    image: false
+  });
+  await addPet(fixture.root, {
+    directoryName: "zeta-synthetic-source-id",
+    displayName: "synthetic\ninvalid",
+    image: false
+  });
+  await addPet(fixture.root, {
+    directoryName: "broken-synthetic-source-id",
+    manifestContent: "{",
+    image: false
+  });
+  const oversizedDirectory = await addPet(fixture.root, {
+    directoryName: "gamma-synthetic-source-id",
+    image: false
+  });
+  await truncate(
+    join(oversizedDirectory, "pet.json"),
+    MAX_EXPERIMENTAL_PET_MANIFEST_BYTES + 1
+  );
+
+  const catalog = await listExperimentalPets({ codexHome: fixture.root });
+
+  assert.deepEqual(catalog, [
+    { key: 1, displayName: "Alpha Pet", selected: false },
+    { key: 2, displayName: "Alpha Pet", selected: false },
+    { key: 3, displayName: "Synthetic Pet", selected: true },
+    { key: 4, displayName: null, selected: false }
+  ]);
+  for (const item of catalog) {
+    assert.deepEqual(Object.keys(item), EXPERIMENTAL_PET_CATALOG_FIELDS);
+  }
+
+  const serialized = JSON.stringify(catalog);
+  assert.equal(serialized.includes("synthetic-source-id"), false);
+  assert.equal(serialized.includes(scenario.directoryName), false);
+  assert.equal(serialized.includes(fixture.root), false);
+  assert.equal(serialized.includes("spritesheet"), false);
+});
+
+test("uses an explicit catalog key before Desktop selection", async (t) => {
+  const fixture = await createCodexHome(t, {
+    image: createWebpVp8x(64, 72)
+  });
+  await addPet(fixture.root, {
+    directoryName: "alpha-synthetic-source-id",
+    displayName: "Alpha Pet",
+    image: createWebpVp8x(320, 288)
+  });
+  const catalog = await listExperimentalPets({ codexHome: fixture.root });
+  const explicit = catalog.find((item) => item.displayName === "Alpha Pet");
+
+  assert.equal(explicit.selected, false);
+  const selectedResult = await readExperimentalPet({
+    codexHome: fixture.root
+  });
+  const explicitResult = await readExperimentalPet({
+    codexHome: fixture.root,
+    petKey: explicit.key
+  });
+
+  assert.equal(selectedResult.status, "ok");
+  assert.equal(selectedResult.image.width, 64);
+  assert.equal(explicitResult.status, "ok");
+  assert.equal(explicitResult.image.width, 320);
+  assert.equal(explicitResult.image.height, 288);
+
+  for (const petKey of [0, -1, 1.5, "1", 99, undefined]) {
+    assert.deepEqual(
+      await readExperimentalPet({ codexHome: fixture.root, petKey }),
+      unavailable("selected_pet_selection_unavailable")
+    );
+  }
+});
+
+test("does not implicitly select the only installed custom pet", async (t) => {
+  const fixture = await createCodexHome(t, { state: false });
+  const catalog = await listExperimentalPets({ codexHome: fixture.root });
+
+  assert.deepEqual(catalog, [
+    { key: 1, displayName: "Synthetic Pet", selected: false }
+  ]);
+  assert.deepEqual(
+    await readExperimentalPet({ codexHome: fixture.root }),
+    unavailable("selected_pet_state_unavailable")
+  );
+  assert.equal((await readExperimentalPet({
+    codexHome: fixture.root,
+    petKey: catalog[0].key
+  })).status, "ok");
 });
 
 test("supports PNG and the three bounded WebP dimension variants", async (t) => {
@@ -253,6 +357,7 @@ test("exports fixed enum and limit contracts", () => {
   assert.deepEqual(EXPERIMENTAL_PET_REASONS, [
     "selected_pet_state_unavailable",
     "selected_pet_not_custom",
+    "selected_pet_selection_unavailable",
     "selected_pet_manifest_unavailable",
     "selected_pet_image_unavailable",
     "selected_pet_image_invalid",
@@ -261,6 +366,11 @@ test("exports fixed enum and limit contracts", () => {
   assert.deepEqual(EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES, [
     "image/webp",
     "image/png"
+  ]);
+  assert.deepEqual(EXPERIMENTAL_PET_CATALOG_FIELDS, [
+    "key",
+    "displayName",
+    "selected"
   ]);
   assert.equal(MAX_EXPERIMENTAL_PET_STATE_BYTES, 1_048_576);
   assert.equal(MAX_EXPERIMENTAL_PET_MANIFEST_BYTES, 65_536);
@@ -292,17 +402,23 @@ async function createCodexHome(t, options = {}) {
     await writeFile(join(root, ".codex-global-state.json"), stateContent);
   }
 
+  const petDirectory = await addPet(root, options);
+
+  return { root, petDirectory };
+}
+
+async function addPet(root, options = {}) {
   const directoryName = options.directoryName ?? scenario.directoryName;
   const petDirectory = join(root, "pets", directoryName);
-  if (options.petDirectory !== false) {
-    await mkdir(petDirectory, { recursive: true });
-  }
+  if (options.petDirectory === false) return petDirectory;
 
+  await mkdir(petDirectory, { recursive: true });
   const imageName = options.imageName ?? "spritesheet.webp";
   const spritesheetPath = options.spritesheetPath ?? imageName;
-  if (options.petDirectory !== false && options.manifest !== false) {
+  if (options.manifest !== false) {
     const manifestValue = options.manifestValue ?? {
       ...scenario.manifest,
+      displayName: options.displayName ?? scenario.manifest.displayName,
       spritesheetPath
     };
     const manifestContent = options.manifestContent
@@ -310,14 +426,14 @@ async function createCodexHome(t, options = {}) {
     await writeFile(join(petDirectory, "pet.json"), manifestContent);
   }
 
-  if (options.petDirectory !== false && options.image !== false) {
+  if (options.image !== false) {
     const image = options.image ?? createWebpVp8x(64, 72);
     const imagePath = join(petDirectory, imageName);
     await mkdir(dirname(imagePath), { recursive: true });
     await writeFile(imagePath, image);
   }
 
-  return { root, petDirectory };
+  return petDirectory;
 }
 
 async function temporaryDirectory(t) {
