@@ -6,7 +6,9 @@ import { resolveCodexExecutable } from "./codex-executable.js";
 import { CODEX_USAGE_ERROR_CODES, CodexUsageError } from "./errors.js";
 import {
   createUnavailableFullProfile,
-  normalizeFullProfileResult
+  createUnavailableFullProfileV2,
+  normalizeFullProfileResult,
+  normalizeFullProfileV2Result
 } from "./experimental-profile.js";
 
 export const EXPERIMENTAL_PROFILE_URL =
@@ -23,6 +25,7 @@ const ACCOUNT_READ_REQUEST_ID = 2;
 const AUTH_STATUS_REQUEST_ID = 3;
 const CLIENT_VERSION = "0.4.0";
 const ACCOUNT_CLAIM = "https://api.openai.com/auth";
+const AUTHORIZATION_SCHEME = "Bearer";
 
 export async function readExperimentalProfile(options = {}) {
   const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
@@ -34,6 +37,9 @@ export async function readExperimentalProfile(options = {}) {
   const usage = normalizeAccountUsageResult(session.usageResult, {
     capturedAt: options.capturedAt
   });
+  const pet = options.includePet === true
+    ? await readRequestedPet(options)
+    : null;
   const planType = extractPlanType(session.accountResult);
   let authToken = extractAuthToken(session.authResult);
   let accountId = authToken === null ? null : extractAccountId(authToken);
@@ -44,7 +50,9 @@ export async function readExperimentalProfile(options = {}) {
   if (authToken === null || accountId === null) {
     authToken = null;
     accountId = null;
-    return createUnavailableFullProfile(usage);
+    return options.includePet === true
+      ? createUnavailableFullProfileV2(usage, pet)
+      : createUnavailableFullProfile(usage);
   }
 
   try {
@@ -56,14 +64,99 @@ export async function readExperimentalProfile(options = {}) {
     });
 
     if (remoteResult === null) {
-      return createUnavailableFullProfile(usage);
+      return options.includePet === true
+        ? createUnavailableFullProfileV2(usage, pet)
+        : createUnavailableFullProfile(usage);
     }
 
-    return normalizeFullProfileResult(usage, remoteResult, { planType });
+    return options.includePet === true
+      ? normalizeFullProfileV2Result(usage, remoteResult, pet, { planType })
+      : normalizeFullProfileResult(usage, remoteResult, { planType });
   } finally {
     authToken = null;
     accountId = null;
   }
+}
+
+async function readRequestedPet(options) {
+  let petModule;
+
+  async function loadPetModule() {
+    petModule ??= await import("./experimental-pet.js");
+    return petModule;
+  }
+
+  async function readPet(petOptions) {
+    const reader = options.readExperimentalPet
+      ?? (await loadPetModule()).readExperimentalPet;
+    return reader(petOptions);
+  }
+
+  async function listPets(petOptions) {
+    const reader = options.listExperimentalPets
+      ?? (await loadPetModule()).listExperimentalPets;
+    return reader(petOptions);
+  }
+
+  const petOptions = copyPetSourceOptions(options);
+
+  try {
+    if (options.forcePetSelection === true) {
+      return await selectRequestedPet(options, petOptions, listPets, readPet);
+    }
+
+    if (Object.hasOwn(options, "petKey")) {
+      return await readPet({ ...petOptions, petKey: options.petKey });
+    }
+
+    const selected = await readPet(petOptions);
+    if (selected?.status === "ok" || typeof options.selectPet !== "function") {
+      return selected;
+    }
+
+    return await selectRequestedPet(options, petOptions, listPets, readPet);
+  } catch {
+    return selectionUnavailablePet();
+  }
+}
+
+async function selectRequestedPet(
+  options,
+  petOptions,
+  listPets,
+  readPet
+) {
+  if (typeof options.selectPet !== "function") {
+    return selectionUnavailablePet();
+  }
+
+  try {
+    const catalog = await listPets(petOptions);
+    const petKey = await options.selectPet(catalog);
+    if (!Number.isSafeInteger(petKey) || petKey < 1) {
+      return selectionUnavailablePet();
+    }
+    return await readPet({ ...petOptions, petKey });
+  } catch {
+    return selectionUnavailablePet();
+  }
+}
+
+function copyPetSourceOptions(options) {
+  const copied = {};
+  for (const key of ["codexHome", "env", "homeDir"]) {
+    if (Object.hasOwn(options, key)) copied[key] = options[key];
+  }
+  return copied;
+}
+
+function selectionUnavailablePet() {
+  return {
+    status: "unavailable",
+    reason: "selected_pet_selection_unavailable",
+    kind: null,
+    image: null
+  };
 }
 
 async function requestExperimentalSession(options) {
@@ -358,7 +451,7 @@ async function requestRemoteProfile(options) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${options.authToken}`,
+        Authorization: `${AUTHORIZATION_SCHEME} ${options.authToken}`,
         "ChatGPT-Account-Id": options.accountId,
         originator: "codex-usage-analyzer",
         "User-Agent": `codex-usage-analyzer/${CLIENT_VERSION}`

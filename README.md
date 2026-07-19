@@ -68,7 +68,8 @@ npx codex-usage-analyzer@latest --json
 > **Experimental: `profile` command.** It adds identity, a 52-week token activity
 > map, activity insights, and top invocations (most-used skills and plugins with
 > usage counts). It uses an unsupported private endpoint and may expose private
-> data.
+> data. A separate `--include-pet` opt-in can also include the selected local
+> custom Codex pet spritesheet.
 > [Learn more about the experimental `profile` command.](#experimental-profile-command)
 
 ## Why this CLI
@@ -118,7 +119,8 @@ codex-usage-analyzer - Read your Codex account usage
 
 Usage:
   codex-usage-analyzer [usage] [--json]
-  codex-usage-analyzer profile [--json]  (experimental)
+  codex-usage-analyzer profile [--json] [--include-pet]  (experimental)
+  codex-usage-analyzer profile --include-pet [--pet-key N | --select-pet]
   codex-usage-analyzer [usage|profile] --help
   codex-usage-analyzer --version
 ```
@@ -131,10 +133,13 @@ Usage:
 | `codex-usage-analyzer usage --json` | Same JSON output |
 | `codex-usage-analyzer profile` | Experimental human-readable profile and token activity |
 | `codex-usage-analyzer profile --json` | Experimental Full Profile Envelope JSON |
+| `codex-usage-analyzer profile --include-pet` | Full Profile v2 with the Desktop-selected custom pet; interactive human output offers a selector when that selection is unavailable |
+| `codex-usage-analyzer profile --include-pet --pet-key 2` | Full Profile v2 with catalog key `2` |
+| `codex-usage-analyzer profile --include-pet --select-pet` | Force the interactive arrow-key selector; stdin and stderr must be TTYs |
 | `codex-usage-analyzer --help` | Help without starting app-server |
 | `codex-usage-analyzer --version` | Package version without starting app-server |
 
-Command output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr. The experimental profile warning is always written to stderr, including successful profile calls. An unavailable private profile still emits an envelope and exits with status `1`; canonical usage remains nested when the official read succeeded.
+Command output is written to stdout. Failures are written to stderr as a stable error code and a safe message, without raw RPC data or app-server stderr. The experimental profile warning is always written to stderr, including successful profile calls. Pet opt-in adds a second warning. An unavailable private profile still emits an envelope and exits with status `1`; canonical usage remains nested when the official read succeeded.
 
 ## SDK
 
@@ -157,6 +162,26 @@ try {
 
 The SDK returns the same document as CLI `--json`. See the [Account Usage Contract](docs/account-usage-contract.md) and [JSON Schema](docs/account-usage.schema.json) for field and compatibility rules.
 
+The experimental profile and pet APIs are isolated in an explicit subpath:
+
+```js
+import {
+  listExperimentalPets,
+  readExperimentalProfile
+} from "codex-usage-analyzer/experimental-profile";
+
+const pets = await listExperimentalPets();
+const selectedKey = pets.find((pet) => pet.selected)?.key;
+const profile = await readExperimentalProfile({
+  includePet: true,
+  ...(selectedKey === undefined ? {} : { petKey: selectedKey })
+});
+```
+
+`listExperimentalPets()` returns deterministic, one-based keys and safe display
+metadata; it does not read image bytes. Module callers can instead pass
+`selectPet(catalog)` and return a key. The root SDK surface remains unchanged.
+
 ## How it works
 
 1. Prefer the `codex` executable available on `PATH`.
@@ -175,7 +200,7 @@ Profile sites, README cards, and other services can accept the identity-free JSO
 
 Do not add identity fields to the account usage document. A downstream service should resolve GitHub identity from its own authenticated account binding, not trust a display name or avatar submitted by this CLI.
 
-Downstreams that explicitly accept the Full Profile Envelope must keep GitHub identity as the ownership proof, treat remote profile identity as cosmetic untrusted input, and opt in separately before storing activity insights.
+Downstreams that explicitly accept the Full Profile Envelope must keep GitHub identity as the ownership proof, treat remote profile identity as cosmetic untrusted input, and opt in separately before storing activity insights or pet image bytes.
 
 ## Privacy and Security
 
@@ -188,7 +213,7 @@ The default CLI does not directly read or emit:
 
 Treat account usage as private data even though the contract excludes identity. Review a downstream service's retention and visibility policy before submitting output anywhere.
 
-The experimental `profile` command has a different privacy boundary: it can emit identity, an avatar source URL, plan information, activity insights, and invocation names. Inspect its JSON and the downstream privacy policy before storing, publishing, or submitting it.
+The experimental `profile` command has a different privacy boundary: it can emit identity, an avatar source URL, plan information, activity insights, and invocation names. With `--include-pet`, it also reads a local custom-pet manifest and embeds the complete spritesheet as base64 plus a digest and image metadata. The base64 is the image, not a harmless identifier. Inspect its JSON and the downstream privacy policy before storing, publishing, or submitting it.
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md).
 
@@ -204,6 +229,8 @@ includes the same canonical usage and adds:
 - **Activity insights:** fast mode share, reasoning effort, skills explored,
   total skill uses, and total threads
 - **Top invocations:** most-used skills and plugins with usage counts
+- **Optional custom pet:** the complete local spritesheet and validated metadata,
+  only when `--include-pet` is present
 
 > **Experimental and unsupported:** `profile` uses the private
 > `/wham/profiles/me` endpoint. It can change or stop working without notice.
@@ -265,6 +292,24 @@ For machine-readable output:
 ```bash
 npx codex-usage-analyzer@latest profile --json
 ```
+
+To include a custom pet, use one of these explicit forms:
+
+```bash
+# Prefer the custom pet already selected in Codex Desktop.
+npx codex-usage-analyzer@latest profile --json --include-pet
+
+# Choose by the deterministic one-based catalog key.
+npx codex-usage-analyzer@latest profile --json --include-pet --pet-key 2
+
+# Force the interactive arrow-key selector (TTY only).
+npx codex-usage-analyzer@latest profile --include-pet --select-pet
+```
+
+Human TTY output automatically offers the selector only when the Desktop-selected
+custom pet cannot be resolved. JSON output never prompts unless `--select-pet`
+is explicitly present. Cancellation or an invalid selection produces a safe
+unavailable `pet` result rather than silently choosing the first pet.
 
 ```json
 {
@@ -344,11 +389,18 @@ Key limitations:
   not directly read authentication files, cookies, or keychains, and JavaScript
   cannot guarantee memory zeroization.
 - `profile --json` returns a separate experimental Full Profile Envelope; it does
-  not extend the stable Account Usage Contract or public SDK.
+  not extend the stable Account Usage Contract or root SDK.
+- Pet inclusion changes the envelope from v1 to v2 and adds the required `pet`
+  field. Without `--include-pet`, output remains Full Profile v1 compatible.
+- Catalog keys are local, one-based selectors for the current catalog snapshot;
+  they are not persistent pet identifiers.
+- Pet base64, digest, dimensions, and byte length are present in JSON. Human
+  output shows only safe metadata and never prints the base64 or digest.
 
 See the [Experimental Full Profile Contract](docs/experimental-full-profile.md)
-and [JSON Schema](docs/experimental-full-profile.schema.json) before integrating,
-storing, or publishing this output.
+and the JSON Schemas for [v1](docs/experimental-full-profile.schema.json) and
+[v2](docs/experimental-full-profile-v2.schema.json) before integrating, storing,
+or publishing this output.
 
 ## Troubleshooting
 

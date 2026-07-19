@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  EXPERIMENTAL_PET_FIELDS,
+  EXPERIMENTAL_PET_IMAGE_FIELDS,
   FULL_PROFILE_ACTIVITY_FIELDS,
   FULL_PROFILE_CONTRACT_VERSION,
   FULL_PROFILE_FIELDS,
@@ -11,14 +14,34 @@ import {
   FULL_PROFILE_KIND,
   FULL_PROFILE_STABILITY,
   FULL_PROFILE_STATUSES,
+  FULL_PROFILE_V2_CONTRACT_VERSION,
+  FULL_PROFILE_V2_FIELDS,
   createUnavailableFullProfile,
-  normalizeFullProfileResult
+  createUnavailableFullProfileV2,
+  normalizeFullProfileResult,
+  normalizeFullProfileV2Result
 } from "../experimental-profile.js";
+import {
+  EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES,
+  EXPERIMENTAL_PET_REASONS,
+  MAX_EXPERIMENTAL_PET_IMAGE_BYTES,
+  MAX_EXPERIMENTAL_PET_IMAGE_DIMENSION
+} from "../experimental-pet.js";
 
 const CAPTURED_AT = "2026-01-01T00:00:00.000Z";
 const schemaPath = fileURLToPath(
   new URL("../../docs/experimental-full-profile.schema.json", import.meta.url)
 );
+const schemaV2Path = fileURLToPath(
+  new URL(
+    "../../docs/experimental-full-profile-v2.schema.json",
+    import.meta.url
+  )
+);
+const FULL_PROFILE_V1_SCHEMA_SHA256 =
+  "58c1ec318968d693aa914501938f54f8223a4064e5e94b853525f2b64d48bf09";
+const FULL_PROFILE_V1_FIXTURE_SHA256 =
+  "e35f588da18bf7be78a5c38025d85728e462a181b196742353c778d8af5b1deb";
 
 test("normalizes a complete allowlisted Full Profile Envelope", () => {
   const usage = createUsage();
@@ -343,6 +366,200 @@ test("keeps the experimental schema aligned with runtime field sets", () => {
   assert.equal(schema.definitions.topInvocation.additionalProperties, false);
 });
 
+test("preserves the Full Profile v1 field order and schema bytes", () => {
+  const result = normalizeFullProfileResult(
+    createUsage(),
+    createRemoteProfile(),
+    { planType: " synthetic-plan " }
+  );
+  const schemaBytes = readFileSync(schemaPath);
+
+  assert.deepEqual(Object.keys(result), [
+    "fullProfileContractVersion",
+    "kind",
+    "stability",
+    "status",
+    "usage",
+    "profile",
+    "activityInsights"
+  ]);
+  assert.equal(result.fullProfileContractVersion, 1);
+  assert.equal(
+    createHash("sha256").update(schemaBytes).digest("hex"),
+    FULL_PROFILE_V1_SCHEMA_SHA256
+  );
+  assert.equal(
+    createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+    FULL_PROFILE_V1_FIXTURE_SHA256
+  );
+});
+
+test("normalizes an allowlisted Full Profile v2 pet envelope", () => {
+  const pet = createAvailablePet();
+  pet.unknown = "synthetic-private-pet";
+  pet.image.unknown = "synthetic-private-image";
+
+  const result = normalizeFullProfileV2Result(
+    createUsage(),
+    createRemoteProfile(),
+    pet
+  );
+
+  assert.equal(
+    result.fullProfileContractVersion,
+    FULL_PROFILE_V2_CONTRACT_VERSION
+  );
+  assert.equal(result.status, "ok");
+  assert.deepEqual(Object.keys(result), FULL_PROFILE_V2_FIELDS);
+  assert.deepEqual(Object.keys(result.pet), EXPERIMENTAL_PET_FIELDS);
+  assert.deepEqual(
+    Object.keys(result.pet.image),
+    EXPERIMENTAL_PET_IMAGE_FIELDS
+  );
+  assert.deepEqual(result.pet, createAvailablePet());
+  assert.equal(JSON.stringify(result).includes("synthetic-private"), false);
+});
+
+test("applies the Full Profile v2 source status matrix", () => {
+  const availablePet = createAvailablePet();
+  const unavailablePet = createUnavailablePet();
+  const partialRemote = createRemoteProfile();
+  partialRemote.profile.display_name = 123;
+
+  const cases = [
+    ["ok + ok", createRemoteProfile(), availablePet, "ok"],
+    ["unavailable + ok", null, availablePet, "partial"],
+    ["ok + unavailable", createRemoteProfile(), unavailablePet, "partial"],
+    ["partial + ok", partialRemote, availablePet, "partial"],
+    ["unavailable + unavailable", null, unavailablePet, "unavailable"]
+  ];
+
+  for (const [name, remote, pet, expectedStatus] of cases) {
+    const result = normalizeFullProfileV2Result(
+      createUsage(),
+      remote,
+      pet
+    );
+    assert.equal(result.status, expectedStatus, name);
+  }
+
+  assert.equal(
+    createUnavailableFullProfileV2(createUsage(), availablePet).status,
+    "partial"
+  );
+  assert.equal(
+    createUnavailableFullProfileV2(createUsage(), unavailablePet).status,
+    "unavailable"
+  );
+});
+
+test("normalizes invalid pet values to one safe unavailable shape", () => {
+  const cases = [
+    null,
+    {},
+    { ...createAvailablePet(), kind: "built-in" },
+    { ...createAvailablePet(), reason: "synthetic-detail" },
+    { ...createAvailablePet(), image: null },
+    {
+      ...createAvailablePet(),
+      image: { ...createAvailablePet().image, width: 0 }
+    },
+    {
+      ...createAvailablePet(),
+      image: { ...createAvailablePet().image, byteLength: 1 }
+    },
+    {
+      ...createAvailablePet(),
+      image: { ...createAvailablePet().image, sha256: "0".repeat(64) }
+    },
+    {
+      ...createAvailablePet(),
+      image: { ...createAvailablePet().image, base64: "not-base64" }
+    },
+    {
+      status: "unavailable",
+      reason: "synthetic-detail",
+      kind: null,
+      image: null
+    }
+  ];
+
+  for (const value of cases) {
+    const result = normalizeFullProfileV2Result(
+      createUsage(),
+      createRemoteProfile(),
+      value
+    );
+
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.pet, {
+      status: "unavailable",
+      reason: "selected_pet_state_unavailable",
+      kind: null,
+      image: null
+    });
+    assert.equal(JSON.stringify(result).includes("synthetic-detail"), false);
+  }
+});
+
+test("preserves only allowlisted unavailable pet reasons", () => {
+  for (const reason of [
+    "selected_pet_image_too_large",
+    "selected_pet_selection_unavailable"
+  ]) {
+    const pet = {
+      ...createUnavailablePet(reason),
+      unknown: "synthetic-private-pet"
+    };
+    const result = normalizeFullProfileV2Result(
+      createUsage(),
+      null,
+      pet
+    );
+
+    assert.equal(result.status, "unavailable");
+    assert.deepEqual(result.pet, createUnavailablePet(reason));
+    assert.equal(JSON.stringify(result).includes("synthetic-private"), false);
+  }
+});
+
+test("keeps the Full Profile v2 schema aligned with runtime contracts", () => {
+  const schema = JSON.parse(readFileSync(schemaV2Path, "utf8"));
+
+  assert.deepEqual(schema.required, FULL_PROFILE_V2_FIELDS);
+  assert.equal(
+    schema.properties.fullProfileContractVersion.const,
+    FULL_PROFILE_V2_CONTRACT_VERSION
+  );
+  assert.equal(schema.properties.kind.const, FULL_PROFILE_KIND);
+  assert.equal(schema.properties.stability.const, FULL_PROFILE_STABILITY);
+  assert.deepEqual(schema.properties.status.enum, FULL_PROFILE_STATUSES);
+  assert.deepEqual(schema.definitions.pet.required, EXPERIMENTAL_PET_FIELDS);
+  assert.deepEqual(
+    schema.definitions.petImage.required,
+    EXPERIMENTAL_PET_IMAGE_FIELDS
+  );
+  assert.deepEqual(
+    schema.definitions.pet.properties.reason.oneOf[0].enum,
+    EXPERIMENTAL_PET_REASONS
+  );
+  assert.deepEqual(
+    schema.definitions.petImage.properties.contentType.enum,
+    EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES
+  );
+  assert.equal(
+    schema.definitions.petImage.properties.width.maximum,
+    MAX_EXPERIMENTAL_PET_IMAGE_DIMENSION
+  );
+  assert.equal(
+    schema.definitions.petImage.properties.byteLength.maximum,
+    MAX_EXPERIMENTAL_PET_IMAGE_BYTES
+  );
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(schema.definitions.pet.additionalProperties, false);
+  assert.equal(schema.definitions.petImage.additionalProperties, false);
+});
+
 function createUsage() {
   return {
     contractVersion: 1,
@@ -403,5 +620,32 @@ function createRemoteProfile() {
       account_id: "synthetic-private-account-id"
     },
     unknown: "synthetic-private-root"
+  };
+}
+
+function createAvailablePet() {
+  const bytes = Buffer.from("synthetic-pet-image", "utf8");
+  return {
+    status: "ok",
+    reason: null,
+    kind: "custom",
+    image: {
+      role: "spritesheet",
+      contentType: "image/webp",
+      width: 8,
+      height: 9,
+      byteLength: bytes.byteLength,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      base64: bytes.toString("base64")
+    }
+  };
+}
+
+function createUnavailablePet(reason = "selected_pet_state_unavailable") {
+  return {
+    status: "unavailable",
+    reason,
+    kind: null,
+    image: null
   };
 }

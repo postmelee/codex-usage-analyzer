@@ -13,6 +13,7 @@ test("formats profile, canonical usage, activity, and invocations in order", () 
   assert.match(output, /Avatar        Available/u);
   assert.match(output, /Plan          synthetic-plan/u);
   assert.equal(output.includes(envelope.profile.avatarUrl), false);
+  assert.equal(output.includes("\nPet\n"), false);
   assert.match(output, /Usage\nCodex account usage\n/u);
   assert.match(output, /Lifetime tokens\s+14\.35B/u);
   assert.match(output, /Fast mode\s+35%/u);
@@ -32,6 +33,56 @@ test("formats profile, canonical usage, activity, and invocations in order", () 
   ];
   const positions = headings.map((heading) => output.indexOf(`\n${heading}\n`));
   assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+});
+
+test("formats only safe pet metadata when Full Profile v2 contains a pet", () => {
+  const envelope = {
+    ...createEnvelope(),
+    fullProfileContractVersion: 2,
+    pet: {
+      status: "ok",
+      reason: null,
+      kind: "custom",
+      image: {
+        role: "spritesheet",
+        contentType: "image/webp",
+        width: 1_536,
+        height: 1_872,
+        byteLength: 1_768_174,
+        sha256: "a".repeat(64),
+        base64: "synthetic-sensitive-image-bytes"
+      }
+    }
+  };
+  const output = formatExperimentalProfile(envelope);
+
+  assert.match(output, /Pet\nStatus\s+Available/u);
+  assert.match(output, /Kind\s+custom/u);
+  assert.match(output, /Content type\s+image\/webp/u);
+  assert.match(output, /Dimensions\s+1536 × 1872/u);
+  assert.match(output, /Byte length\s+1,768,174/u);
+  assert.equal(output.includes(envelope.pet.image.sha256), false);
+  assert.equal(output.includes(envelope.pet.image.base64), false);
+
+  const headings = ["Profile", "Pet", "Usage"];
+  const positions = headings.map((heading) => output.indexOf(`\n${heading}\n`));
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+});
+
+test("renders an unavailable v2 pet without exposing its internal reason", () => {
+  const output = formatExperimentalProfile({
+    ...createEnvelope(),
+    fullProfileContractVersion: 2,
+    pet: {
+      status: "unavailable",
+      reason: "selected_pet_state_unavailable",
+      kind: null,
+      image: null
+    }
+  });
+
+  assert.match(output, /Pet\nUnavailable/u);
+  assert.equal(output.includes("selected_pet_state_unavailable"), false);
 });
 
 test("renders a Sunday-start 52-week heatmap with bounded relative intensity", () => {

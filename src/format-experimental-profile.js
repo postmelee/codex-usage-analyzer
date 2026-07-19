@@ -17,11 +17,16 @@ const DAYS_PER_WEEK = 7;
 const DAY_MS = 86_400_000;
 
 export function formatExperimentalProfile(envelope) {
+  const petSection = Object.hasOwn(envelope, "pet")
+    ? ["", ...formatPet(envelope.pet)]
+    : [];
+
   return [
     "Codex profile (experimental)",
     `Status  ${envelope.status}`,
     "",
     ...formatProfile(envelope.profile),
+    ...petSection,
     "",
     "Usage",
     formatAccountUsage(envelope.usage),
@@ -32,6 +37,23 @@ export function formatExperimentalProfile(envelope) {
     "",
     ...formatTopInvocations(envelope.activityInsights?.topInvocations ?? null)
   ].join("\n");
+}
+
+function formatPet(pet) {
+  if (pet?.status !== "ok" || pet.kind !== "custom" || pet.image === null) {
+    return ["Pet", UNAVAILABLE];
+  }
+
+  return [
+    "Pet",
+    ...formatRows([
+      ["Status", "Available"],
+      ["Kind", "custom"],
+      ["Content type", pet.image.contentType],
+      ["Dimensions", `${pet.image.width} × ${pet.image.height}`],
+      ["Byte length", formatInteger(pet.image.byteLength)]
+    ])
+  ];
 }
 
 function formatProfile(profile) {

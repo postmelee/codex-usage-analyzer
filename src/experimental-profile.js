@@ -1,6 +1,16 @@
+import { createHash } from "node:crypto";
+
 import { ACCOUNT_USAGE_SUMMARY_FIELDS } from "./account-usage.js";
+import {
+  EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES,
+  EXPERIMENTAL_PET_REASONS,
+  MAX_EXPERIMENTAL_PET_IMAGE_BYTES,
+  MAX_EXPERIMENTAL_PET_IMAGE_DIMENSION,
+  MAX_EXPERIMENTAL_PET_IMAGE_PIXELS
+} from "./experimental-pet.js";
 
 export const FULL_PROFILE_CONTRACT_VERSION = 1;
+export const FULL_PROFILE_V2_CONTRACT_VERSION = 2;
 export const FULL_PROFILE_KIND = "codex-usage-analyzer.fullProfile";
 export const FULL_PROFILE_STABILITY = "experimental";
 
@@ -31,6 +41,34 @@ export const FULL_PROFILE_INVOCATION_FIELDS = Object.freeze([
   "type",
   "name",
   "usageCount"
+]);
+
+export const FULL_PROFILE_V2_FIELDS = Object.freeze([
+  "fullProfileContractVersion",
+  "kind",
+  "stability",
+  "status",
+  "usage",
+  "profile",
+  "activityInsights",
+  "pet"
+]);
+
+export const EXPERIMENTAL_PET_FIELDS = Object.freeze([
+  "status",
+  "reason",
+  "kind",
+  "image"
+]);
+
+export const EXPERIMENTAL_PET_IMAGE_FIELDS = Object.freeze([
+  "role",
+  "contentType",
+  "width",
+  "height",
+  "byteLength",
+  "sha256",
+  "base64"
 ]);
 
 const PROFILE_STRING_LIMITS = Object.freeze({
@@ -92,6 +130,32 @@ export function createUnavailableFullProfile(usageDocument) {
   );
 }
 
+export function normalizeFullProfileV2Result(
+  usageDocument,
+  remoteResult,
+  petResult,
+  options = {}
+) {
+  const fullProfileV1 = normalizeFullProfileResult(
+    usageDocument,
+    remoteResult,
+    options
+  );
+  const pet = normalizeExperimentalPet(petResult);
+
+  return createV2Envelope(fullProfileV1, pet);
+}
+
+export function createUnavailableFullProfileV2(
+  usageDocument,
+  petResult = null
+) {
+  return createV2Envelope(
+    createUnavailableFullProfile(usageDocument),
+    normalizeExperimentalPet(petResult)
+  );
+}
+
 function createEnvelope(status, usage, profile, activityInsights) {
   return {
     fullProfileContractVersion: FULL_PROFILE_CONTRACT_VERSION,
@@ -102,6 +166,121 @@ function createEnvelope(status, usage, profile, activityInsights) {
     profile,
     activityInsights
   };
+}
+
+function createV2Envelope(fullProfileV1, pet) {
+  return {
+    fullProfileContractVersion: FULL_PROFILE_V2_CONTRACT_VERSION,
+    kind: fullProfileV1.kind,
+    stability: fullProfileV1.stability,
+    status: resolveFullProfileV2Status(fullProfileV1.status, pet.status),
+    usage: fullProfileV1.usage,
+    profile: fullProfileV1.profile,
+    activityInsights: fullProfileV1.activityInsights,
+    pet
+  };
+}
+
+function resolveFullProfileV2Status(remoteStatus, petStatus) {
+  if (remoteStatus === "ok" && petStatus === "ok") return "ok";
+  if (remoteStatus === "unavailable" && petStatus === "unavailable") {
+    return "unavailable";
+  }
+  return "partial";
+}
+
+function normalizeExperimentalPet(value) {
+  if (!isRecord(value)) return unavailableExperimentalPet();
+
+  if (value.status === "unavailable"
+    && EXPERIMENTAL_PET_REASONS.includes(value.reason)
+    && value.kind === null
+    && value.image === null) {
+    return {
+      status: "unavailable",
+      reason: value.reason,
+      kind: null,
+      image: null
+    };
+  }
+
+  if (value.status !== "ok"
+    || value.reason !== null
+    || value.kind !== "custom") {
+    return unavailableExperimentalPet();
+  }
+
+  const image = normalizeExperimentalPetImage(value.image);
+  if (image === null) return unavailableExperimentalPet();
+
+  return {
+    status: "ok",
+    reason: null,
+    kind: "custom",
+    image
+  };
+}
+
+function normalizeExperimentalPetImage(value) {
+  if (!isRecord(value)
+    || value.role !== "spritesheet"
+    || !EXPERIMENTAL_PET_IMAGE_CONTENT_TYPES.includes(value.contentType)
+    || !isPositiveBoundedInteger(
+      value.width,
+      MAX_EXPERIMENTAL_PET_IMAGE_DIMENSION
+    )
+    || !isPositiveBoundedInteger(
+      value.height,
+      MAX_EXPERIMENTAL_PET_IMAGE_DIMENSION
+    )
+    || value.width * value.height > MAX_EXPERIMENTAL_PET_IMAGE_PIXELS
+    || !isPositiveBoundedInteger(
+      value.byteLength,
+      MAX_EXPERIMENTAL_PET_IMAGE_BYTES
+    )
+    || typeof value.sha256 !== "string"
+    || !/^[0-9a-f]{64}$/u.test(value.sha256)
+    || typeof value.base64 !== "string"
+    || !isStrictBase64(value.base64)) {
+    return null;
+  }
+
+  const bytes = Buffer.from(value.base64, "base64");
+  if (bytes.byteLength !== value.byteLength
+    || createHash("sha256").update(bytes).digest("hex") !== value.sha256) {
+    return null;
+  }
+
+  return {
+    role: "spritesheet",
+    contentType: value.contentType,
+    width: value.width,
+    height: value.height,
+    byteLength: value.byteLength,
+    sha256: value.sha256,
+    base64: value.base64
+  };
+}
+
+function unavailableExperimentalPet() {
+  return {
+    status: "unavailable",
+    reason: "selected_pet_state_unavailable",
+    kind: null,
+    image: null
+  };
+}
+
+function isPositiveBoundedInteger(value, maximum) {
+  return Number.isSafeInteger(value) && value >= 1 && value <= maximum;
+}
+
+function isStrictBase64(value) {
+  return value.length >= 4
+    && value.length <= 11_184_812
+    && value.length % 4 === 0
+    && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u
+      .test(value);
 }
 
 function normalizeProfile(value, planType) {

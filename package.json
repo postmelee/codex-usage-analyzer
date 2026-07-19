@@ -27,6 +27,10 @@
     ".": {
       "types": "./src/index.d.ts",
       "import": "./src/index.js"
+    },
+    "./experimental-profile": {
+      "types": "./src/experimental-profile-api.d.ts",
+      "import": "./src/experimental-profile-api.js"
     }
   },
   "files": [
@@ -37,6 +41,10 @@
     "src/codex-executable.js",
     "src/cli.js",
     "src/errors.js",
+    "src/experimental-pet.js",
+    "src/experimental-pet-selector.js",
+    "src/experimental-profile-api.d.ts",
+    "src/experimental-profile-api.js",
     "src/experimental-profile-client.js",
     "src/experimental-profile.js",
     "src/format-account-usage.js",

@@ -2,7 +2,7 @@
 
 This guide defines the boundary between `codex-usage-analyzer` and a service that stores account usage or renders a profile card.
 
-The stable CLI and SDK own one artifact: the identity-free [Account Usage Contract](account-usage-contract.md). An explicit CLI-only experiment can emit a separate [Full Profile Envelope](experimental-full-profile.md). A downstream service owns identity, authorization, submission, persistence, rendering, cache behavior, privacy controls, and deletion.
+The stable CLI and SDK own one artifact: the identity-free [Account Usage Contract](account-usage-contract.md). An explicit CLI or module experiment can emit a separate [Full Profile Envelope](experimental-full-profile.md). A downstream service owns identity, authorization, submission, persistence, rendering, cache behavior, privacy controls, and deletion.
 
 ## Recommended architecture
 
@@ -74,7 +74,7 @@ The following protocol is non-normative. It illustrates a boundary that does not
 
 ```http
 POST /v1/account-usage
-Authorization: Bearer <downstream-issued-submit-token>
+Authorization: bearer <downstream-issued-submit-token>
 Content-Type: application/json
 ```
 
@@ -178,15 +178,54 @@ Activity insight storage requires a separate downstream opt-in and privacy polic
 
 Treat `profile.avatarUrl` as an untrusted remote source. Apply an HTTPS host allowlist, redirect and response-size limits, content-type verification, full image decoding, safe re-encoding, and downstream re-hosting before storage or rendering. Never expose the submitted source URL directly to viewers.
 
+## Experimental custom pet
+
+Full Profile v2 adds a required `pet` result when the caller explicitly uses
+`--include-pet` or `readExperimentalProfile({ includePet: true })`. The default
+Full Profile v1 path never reads pet files. A Tokenmon-style downstream can use
+an available custom pet as a cosmetic portrait image, but it must not treat the
+catalog key, display name, digest, or image as identity or ownership proof.
+
+The default selection is the custom pet already selected in Codex Desktop.
+Callers can explicitly choose a deterministic one-based catalog key, use an
+interactive selector, or provide a module callback that returns a key. Keys are
+valid only for the catalog snapshot in which they were listed. A downstream must
+not persist them as stable pet ids or infer a first/only-pet fallback.
+
+`pet.image.base64` contains the complete submitted spritesheet. Before accepting
+or rendering it, a downstream should:
+
+1. Validate the complete Full Profile v2 document against
+   [`experimental-full-profile-v2.schema.json`](experimental-full-profile-v2.schema.json).
+2. Strictly decode base64 and reject non-canonical or trailing data.
+3. Match decoded bytes to `byteLength` and lowercase SHA-256.
+4. Enforce independent encoded-body, decoded-byte, dimension, and pixel limits.
+5. Verify the declared PNG or WebP content type from decoded bytes and fully
+   decode the image with a maintained image library.
+6. Safely re-encode and re-host the accepted image under a downstream-owned URL.
+
+Never publish the submitted base64 directly, embed it unchanged in a public data
+URL, or log the full envelope. Strip metadata and animation behavior the product
+does not intentionally support. Treat image parsers as an attack surface and
+perform decoding in a resource-bounded worker or sandbox where practical.
+
+Pet retention and publication require a consent control separate from profile
+identity and activity-insight consent. Explain that the local image bytes will be
+uploaded, how they will be rendered, whether they will be public, and how long
+source and derived assets remain. Replacing a pet should advance the profile
+revision and invalidate derived assets. Revocation or deletion must remove the
+source bytes, re-encoded assets, rendered cards, cached variants where possible,
+and any content-addressed references that would keep the image reachable.
+
 Handle envelope status explicitly:
 
 | Status | Downstream behavior |
 |---|---|
 | `ok` | Validate every category, then apply the experimental identity/activity policy. |
 | `partial` | Preserve nested official usage; render or store only non-null fields allowed by policy. |
-| `unavailable` | Accept nested official usage only if the endpoint and product policy allow it; profile and activity are `null`. |
+| `unavailable` | Accept nested official usage only if the endpoint and product policy allow it; v1 profile/activity are unavailable, while v2 may also report pet unavailability. |
 
-Keep the experimental envelope authenticated and non-public by default. Validate it against [`experimental-full-profile.schema.json`](experimental-full-profile.schema.json), preserve null/empty semantics, and isolate stored records by `fullProfileContractVersion` rather than treating it as `contractVersion` 1.
+Keep the experimental envelope authenticated and non-public by default. Validate v1 against [`experimental-full-profile.schema.json`](experimental-full-profile.schema.json) and v2 against [`experimental-full-profile-v2.schema.json`](experimental-full-profile-v2.schema.json), preserve null/empty semantics, and isolate stored records by `fullProfileContractVersion` rather than treating either envelope as `contractVersion` 1.
 
 ## Versioning
 

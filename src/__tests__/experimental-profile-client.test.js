@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import test from "node:test";
@@ -90,6 +91,152 @@ test("uses one isolated app-server session and one fixed profile request", async
   assert.equal(serialized.includes(authToken), false);
   assert.equal(serialized.includes("synthetic-account-id"), false);
   assert.equal(serialized.includes("synthetic-private-email"), false);
+});
+
+test("keeps pet dependencies opt-in and preserves Full Profile v1", async () => {
+  const child = createSuccessfulChild();
+  let petCalls = 0;
+  const result = await readWithChild(child, {
+    fetchImpl: async () => jsonResponse(createRemoteProfile()),
+    readExperimentalPet: async () => {
+      petCalls += 1;
+      return createAvailablePet();
+    },
+    listExperimentalPets: async () => {
+      petCalls += 1;
+      return [];
+    }
+  });
+
+  assert.equal(result.fullProfileContractVersion, 1);
+  assert.equal(Object.hasOwn(result, "pet"), false);
+  assert.equal(petCalls, 0);
+});
+
+test("combines the Desktop selected pet into Full Profile v2", async () => {
+  const child = createSuccessfulChild();
+  const calls = [];
+  const result = await readWithChild(child, {
+    includePet: true,
+    codexHome: "synthetic-codex-home",
+    fetchImpl: async () => jsonResponse(createRemoteProfile()),
+    async readExperimentalPet(options) {
+      calls.push(options);
+      return createAvailablePet();
+    },
+    async listExperimentalPets() {
+      throw new Error("catalog should not be read for an available selection");
+    }
+  });
+
+  assert.deepEqual(calls, [{ codexHome: "synthetic-codex-home" }]);
+  assert.equal(result.fullProfileContractVersion, 2);
+  assert.equal(result.status, "ok");
+  assert.deepEqual(result.pet, createAvailablePet());
+});
+
+test("applies explicit, forced, and fallback pet selection priority", async (t) => {
+  await t.test("explicit key", async () => {
+    const calls = [];
+    const result = await readWithChild(createSuccessfulChild(), {
+      includePet: true,
+      petKey: 2,
+      fetchImpl: async () => jsonResponse(createRemoteProfile()),
+      async readExperimentalPet(options) {
+        calls.push(options);
+        return createAvailablePet();
+      },
+      async listExperimentalPets() {
+        throw new Error("explicit key must not list pets");
+      }
+    });
+
+    assert.deepEqual(calls, [{ petKey: 2 }]);
+    assert.equal(result.status, "ok");
+  });
+
+  await t.test("forced selector", async () => {
+    const calls = [];
+    let selectedCatalog;
+    const catalog = [
+      { key: 1, displayName: "First Pet", selected: true },
+      { key: 2, displayName: "Second Pet", selected: false }
+    ];
+    const result = await readWithChild(createSuccessfulChild(), {
+      includePet: true,
+      forcePetSelection: true,
+      fetchImpl: async () => jsonResponse(createRemoteProfile()),
+      async readExperimentalPet(options) {
+        calls.push(options);
+        return createAvailablePet();
+      },
+      async listExperimentalPets() {
+        return catalog;
+      },
+      async selectPet(value) {
+        selectedCatalog = value;
+        return 2;
+      }
+    });
+
+    assert.equal(selectedCatalog, catalog);
+    assert.deepEqual(calls, [{ petKey: 2 }]);
+    assert.equal(result.status, "ok");
+  });
+
+  await t.test("unavailable Desktop selection fallback", async () => {
+    const calls = [];
+    const result = await readWithChild(createSuccessfulChild(), {
+      includePet: true,
+      fetchImpl: async () => jsonResponse(createRemoteProfile()),
+      async readExperimentalPet(options) {
+        calls.push(options);
+        return Object.hasOwn(options, "petKey")
+          ? createAvailablePet()
+          : createUnavailablePet("selected_pet_state_unavailable");
+      },
+      async listExperimentalPets() {
+        return [{ key: 3, displayName: null, selected: false }];
+      },
+      async selectPet() {
+        return 3;
+      }
+    });
+
+    assert.deepEqual(calls, [{}, { petKey: 3 }]);
+    assert.equal(result.status, "ok");
+  });
+});
+
+test("maps selection cancellation and failures to safe partial v2", async (t) => {
+  for (const [name, selectPet] of [
+    ["cancel", async () => null],
+    ["invalid key", async () => "1"],
+    ["throw", async () => {
+      throw new Error("synthetic-private-selection-detail");
+    }]
+  ]) {
+    await t.test(name, async () => {
+      const result = await readWithChild(createSuccessfulChild(), {
+        includePet: true,
+        forcePetSelection: true,
+        fetchImpl: async () => jsonResponse(createRemoteProfile()),
+        listExperimentalPets: async () => [
+          { key: 1, displayName: "Synthetic Pet", selected: false }
+        ],
+        readExperimentalPet: async () => createAvailablePet(),
+        selectPet
+      });
+
+      assert.equal(result.fullProfileContractVersion, 2);
+      assert.equal(result.status, "partial");
+      assert.deepEqual(
+        result.pet,
+        createUnavailablePet("selected_pet_selection_unavailable")
+      );
+      assert.equal(JSON.stringify(result).includes("synthetic-private"), false);
+    });
+  }
 });
 
 test("keeps account metadata optional and discards email", async () => {
@@ -555,6 +702,33 @@ function createRemoteProfile() {
       top_invocations: []
     },
     metadata: { stats_error: null }
+  };
+}
+
+function createAvailablePet() {
+  const bytes = Buffer.from("synthetic-pet-image", "utf8");
+  return {
+    status: "ok",
+    reason: null,
+    kind: "custom",
+    image: {
+      role: "spritesheet",
+      contentType: "image/webp",
+      width: 8,
+      height: 9,
+      byteLength: bytes.byteLength,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      base64: bytes.toString("base64")
+    }
+  };
+}
+
+function createUnavailablePet(reason) {
+  return {
+    status: "unavailable",
+    reason,
+    kind: null,
+    image: null
   };
 }
 

@@ -1,0 +1,10 @@
+{
+  "selectedAvatarId": "custom:synthetic-pet",
+  "directoryName": "synthetic-pet",
+  "manifest": {
+    "id": "synthetic-pet",
+    "displayName": "Synthetic Pet",
+    "description": "Synthetic fixture only",
+    "spritesheetPath": "spritesheet.webp"
+  }
+}
