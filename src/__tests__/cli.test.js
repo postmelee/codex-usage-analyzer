@@ -335,7 +335,7 @@ test("prints version without starting app-server", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(called, false);
-  assert.equal(io.stdout.value, "0.4.0\n");
+  assert.equal(io.stdout.value, "0.4.1\n");
   assert.equal(io.stderr.value, "");
 });
 
@@ -440,7 +440,7 @@ test("the package bin resolves version without account access", () => {
   });
 
   assert.equal(result.status, 0);
-  assert.equal(result.stdout, "0.4.0\n");
+  assert.equal(result.stdout, "0.4.1\n");
   assert.equal(result.stderr, "");
 });
 

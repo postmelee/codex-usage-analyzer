@@ -3,7 +3,7 @@ import { CodexUsageError } from "./errors.js";
 import { formatAccountUsage } from "./format-account-usage.js";
 
 export const PACKAGE_NAME = "codex-usage-analyzer";
-export const PACKAGE_VERSION = "0.4.0";
+export const PACKAGE_VERSION = "0.4.1";
 export const EXPERIMENTAL_PROFILE_WARNING =
   "codex-usage-analyzer: Warning: profile uses an unsupported experimental endpoint and may expose account identity fields.";
 export const EXPERIMENTAL_PET_WARNING =

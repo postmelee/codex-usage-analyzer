@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-analyzer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Read Codex account usage through the official app-server protocol.",
   "keywords": [
     "codex",
